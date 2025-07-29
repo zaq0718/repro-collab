@@ -12,13 +12,14 @@ Szene: Your supervisor did something, you review it.
 * ask U to create or login to GitHub (milestone I)
 * Explain the learning goals
 * Explain the background
-* Explain Fork
+
 
 ## Milestone II Fork
 
 * I and U live
 * navigate to the repo
 * click on fork
+* Explain Fork
 * show and explain the tracking issue, explain the milestone list, explain relaod of tracking issue.
 * activate issues in fork
 * show /done 3 
