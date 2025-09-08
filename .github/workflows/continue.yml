@@ -7,7 +7,7 @@ concurrency:
 
 on:
   issue_comment:
-    types: [created]
+    types: [created, edited]
 
 jobs:
   route:
