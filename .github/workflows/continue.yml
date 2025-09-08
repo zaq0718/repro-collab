@@ -267,7 +267,7 @@ jobs:
             // 5) Cross off “4.”, reveal “5.”
             const updated = context.payload.issue.body
               .replace(/^(\s*-\s*\[)\s\](\s*4\..*)$/m, '$1x]$2')
-              + '\n- [ ] 5. Close an issue';
+              + '\n- [ ] 5. Close an issue - 🟢 Easy';
               
               //.replace(/\n*<img[^>]*>.*$/m, `\n- [ ] 5. Close an issue\n\n<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/close_issue.gif" alt="Close Issue GIF">`);
 
@@ -525,7 +525,7 @@ jobs:
             // Update the upstream issue checklist
             const updatedBody5 = context.payload.issue.body
                 .replace(/^(\s*-\s*\[)\s\](\s*5\..*)$/m, '$1x]$2')
-                + '\n- [ ] 6. Add a suggestion to the PR';
+                + '\n- [ ] 6. Add a suggestion to the PR - 🟡 Medium';
 
                 //.replace(/\n*<img[^>]*>.*$/m, `\n- [ ] 6. Review and merge a PR\n\n<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/review_pr.gif" alt="Review PR GIF">`);
               
@@ -631,7 +631,7 @@ jobs:
             // Update issue body
             const updatedBody6 = context.payload.issue.body
               .replace(/^(\s*-\s*\[)\s\](\s*6\..*)$/m, '$1x]$2')
-              + '\n- [ ] 7. Merge the pull request';
+              + '\n- [ ] 7. Merge the pull request - 🟡 Medium';
             
             await github.rest.issues.update({
               owner: context.repo.owner,
@@ -693,7 +693,7 @@ jobs:
             // Cross off “7.”, reveal “8.”
             const updatedBody7 = context.payload.issue.body
               .replace(/^(\s*-\s*\[)\s\](\s*7\..*)$/m, '$1x]$2')
-              + '\n- [ ] 8. Find your group';
+              + '\n- [ ] 8. Find your group - 🟢 Easy';
             
             await github.rest.issues.update({
               owner: context.repo.owner,
@@ -753,7 +753,7 @@ jobs:
             // Cross off "8.", reveal "9."
             const updatedBody8 = context.payload.issue.body
               .replace(/^(\s*-\s*\[)\s\](\s*8\..*)$/m, '$1x]$2')
-              + '\n- [ ] 9. Generate and Upload Steven Data.';
+              + '\n- [ ] 9. Generate and Upload Steven Data - 🔴 Hard';
             
             await github.rest.issues.update({
               owner: context.repo.owner,
