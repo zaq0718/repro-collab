@@ -2,7 +2,7 @@
 name: Milestone Router
 
 concurrency:
-  group: "milestones-${{ github.event.issue.number }}"
+  group: "milestones-${{ github.event.issue.number  }}"
   cancel-in-progress: false
 
 on:
@@ -33,93 +33,37 @@ jobs:
           github-token: ${{ secrets.GH_PAT_CROSSREPO }}
           result-encoding: string
           script: |
-            // Retry helper function with exponential backoff
-            async function retryApiCall(apiCall, description = 'API call', maxRetries = 3) {
-              const delays = [1000, 2000, 4000]; // Exponential backoff
-              
-              for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                  console.log(`Attempt ${attempt}/${maxRetries} for: ${description}`);
-                  return await apiCall();
-                } catch (error) {
-                  console.error(`Attempt ${attempt} failed:`, error.message);
-                  
-                  // Handle specific error types
-                  if (error.status === 403) {
-                    if (error.response?.headers['x-ratelimit-remaining'] === '0') {
-                      const resetTime = error.response.headers['x-ratelimit-reset'];
-                      const waitTime = Math.max(0, (resetTime * 1000) - Date.now());
-                      console.log(`Rate limited. Waiting ${waitTime}ms until reset...`);
-                      await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
-                      continue; // Retry after rate limit resets
-                    }
-                    // Other 403 errors might be permissions - don't retry
-                    throw new Error(`Permission denied: ${error.message}`);
-                  }
-                  
-                  if (error.status === 404) {
-                    // Don't retry 404s - resource doesn't exist
-                    throw new Error(`Resource not found: ${error.message}`);
-                  }
-                  
-                  if (error.status === 422) {
-                    // Validation error - don't retry
-                    throw new Error(`Validation error: ${error.message}`);
-                  }
-                  
-                  // For other errors, retry with backoff
-                  if (attempt < maxRetries) {
-                    const delay = delays[attempt - 1] || 5000;
-                    console.log(`Retrying in ${delay}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                  } else {
-                    // Final attempt failed
-                    throw new Error(`All ${maxRetries} attempts failed for ${description}: ${error.message}`);
-                  }
-                }
-              }
+            // 1) Grab body and regex all numbered tasks
+            const body = context.payload.issue.body;
+            const taskRe = /^\s*-\s*\[[ x]\]\s*(\d+)\./gm;
+            let m, nums = [];
+            while ((m = taskRe.exec(body)) !== null) {
+              nums.push(parseInt(m[1], 10));
             }
+            if (nums.length === 0) return '-1';
+            
+            // 2) Determine max number from the list
+            const max = Math.max(...nums);
 
-            try {
-              // 1) Grab body and regex all numbered tasks
-              const body = context.payload.issue.body;
-              const taskRe = /^\s*-\s*\[[ x]\]\s*(\d+)\./gm;
-              let m, nums = [];
-              while ((m = taskRe.exec(body)) !== null) {
-                nums.push(parseInt(m[1], 10));
-              }
-              if (nums.length === 0) return '-1';
-              
-              // 2) Determine max number from the list
-              const max = Math.max(...nums);
+            // 3) Parse the /done M command
+            const cmd = context.payload.comment.body.trim();
+            const cm = /^\/done\s+(\d+)/.exec(cmd);
+            if (!cm) return '-1';
+            const num = parseInt(cm[1], 10);
 
-              // 3) Parse the /done M command
-              const cmd = context.payload.comment.body.trim();
-              const cm = /^\/done\s+(\d+)/.exec(cmd);
-              if (!cm) return '-1';
-              const num = parseInt(cm[1], 10);
-
-              // 4) Validate range
-              if (num < 1 || num > max) {
-                await retryApiCall(async () => {
-                  return await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: context.issue.number,
-                    body: `⚠️ Invalid milestone number. Please pick a number between 1 and ${max}.`
-                  });
-                }, 'Post validation error comment');
-                return '-1';
-              }
-
-              // 5) OK—return it
-              return String(num);
-            } catch (error) {
-              console.error('Critical error in parse step:', error);
-              core.setFailed(`Failed to parse command: ${error.message}`);
+            // 4) Validate range
+            if (num < 1 || num > max) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                issue_number: context.issue.number,
+                body: `🚫 Invalid milestone number. Please pick a number between 1 and ${max}.`
+              });
               return '-1';
             }
 
+            // 5) OK—return it
+            return String(num);
       - name: Verify milestone 3
         if: steps.parse.outputs.result == '3'
         uses: actions/github-script@v7
@@ -128,165 +72,99 @@ jobs:
         with:
           github-token: ${{ secrets.GH_PAT_CROSSREPO }}
           script: |
-            // Retry helper function
-            async function retryApiCall(apiCall, description = 'API call', maxRetries = 3) {
-              const delays = [1000, 2000, 4000];
-              
-              for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                  console.log(`Attempt ${attempt}/${maxRetries} for: ${description}`);
-                  return await apiCall();
-                } catch (error) {
-                  console.error(`Attempt ${attempt} failed:`, error.message);
-                  
-                  if (error.status === 403) {
-                    if (error.response?.headers['x-ratelimit-remaining'] === '0') {
-                      const resetTime = error.response.headers['x-ratelimit-reset'];
-                      const waitTime = Math.max(0, (resetTime * 1000) - Date.now());
-                      console.log(`Rate limited. Waiting ${waitTime}ms until reset...`);
-                      await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
-                      continue;
-                    }
-                    throw new Error(`Permission denied: ${error.message}`);
-                  }
-                  
-                  if (error.status === 404) {
-                    throw new Error(`Resource not found: ${error.message}`);
-                  }
-                  
-                  if (error.status === 422) {
-                    throw new Error(`Validation error: ${error.message}`);
-                  }
-                  
-                  if (attempt < maxRetries) {
-                    const delay = delays[attempt - 1] || 5000;
-                    console.log(`Retrying in ${delay}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                  } else {
-                    throw new Error(`All ${maxRetries} attempts failed for ${description}: ${error.message}`);
-                  }
-                }
-              }
-            }
-
             const [owner, repo] = process.env.FORK_REPO.split('/');
-            
-            try {
-              const { data } = await retryApiCall(async () => {
-                return await github.rest.repos.get({ owner, repo });
-              }, `Get repository ${owner}/${repo}`);
+            const { data } = await github.rest.repos.get({ owner, repo });
 
-              if (!data.has_issues) {
-                // failure feedback only
-                await retryApiCall(async () => {
-                  return await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: context.issue.number,
-                    body: '⚠️ Milestone 3 not complete. Please enable Issues on your fork, then `/done 3` again.'
-                  });
-                }, 'Post milestone 3 failure comment');
-              } else {
-                // 1) Cross off milestone 3 in the upstream issue body
-                let updatedBody = context.payload.issue.body
-                  .replace(/^(\s*-\s*\[)\s\](\s*3\..*)$/m, '$1x]$2')
-                  .replace(/\n*<img[^>]*>.*$/m, '\n- [ ] 4. Create an issue');
-                
-                await retryApiCall(async () => {
-                  return await github.rest.issues.update({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: context.issue.number,
-                    body: updatedBody,
-                    state: 'open'
-                  });
-                }, 'Update issue body for milestone 3');
-                
-                // 3) Create a new issue in the fork
-                const preregistrationUrl = context.payload.issue.html_url;
-                const issueBodyLines = [
-                  'Great work on enabling issues! Now create your first one.',
-                  '', 
-                  'In collaborative writing projects on GitHub, issues are the central way to coordinate work and communicate with your collaborators.', 
-                  'For example, you might want to create an issue to remind yourself (and your collaborators) that your project doesn\'t yet have a preregistration.',
-                  '', 
-                  'In issues (as in many GitHub tools), text is formatted in Markdown. Markdown lets you write plain text while adding simple symbols to control formatting, such as **bold**, *italics*, or headings.',
-                  `
-              \`\`\`markdown
-              # A heading
+            if (!data.has_issues) {
+              // failure feedback only
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: '🚫 Milestone 3 not complete. Please enable Issues on your fork, then `/done 3` again.'
+              });
+            } else {
+              // 1) Cross off milestone 3 in the upstream issue body
+              let updatedBody = context.payload.issue.body
+                .replace(/^(\s*-\s*\[)\s\](\s*3\..*)$/m, '$1x]$2')
+                .replace(/\n*<img[^>]*>.*$/m, '\n- [ ] 4. Create an issue');
 
-              A list:
+                //.replace(/\n*<img[^>]*>.*$/m, `\n- [ ] 4. Create an issue\n\n<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/create_issue.gif" alt="Create Issue GIF">`);
+              
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                issue_number: context.issue.number,
+                body: updatedBody,
+                state: 'open'
+              });
+              
+              // 3) Create a new issue in the fork for them to "create your own first issue"
+              const preregistrationUrl = context.payload.issue.html_url;
+              const issueBodyLines = [
+                'Great work on enabling issues! Now create your first one.',
+                '', 
+                'In collaborative writing projects on GitHub, issues are the central way to coordinate work and communicate with your collaborators.', 
+                'For example, you might want to create an issue to remind yourself (and your collaborators) that your project doesn\'t yet have a preregistration.',
+                '', 
+                'In issues (as in many GitHub tools), text is formatted in Markdown. Markdown lets you write plain text while adding simple symbols to control formatting, such as **bold**, *italics*, or headings.',
+                `
+            \`\`\`markdown
+            # A heading
 
-              * apple
-              * banana
+            A list:
 
-              **bold**
-              *italic*
+            * apple
+            * banana
 
-              A todo list:
+            **bold**
+            *italic*
 
-              - [x] done
-              - [ ] todo
+            A todo list:
 
-              For Git's sake, put each sentence on its own line.
-              Please.
-              I beg you.
-              \`\`\`
-                  `,
-                  'You can find an overview of Markdown formatting options [here](https://media.datacamp.com/legacy/image/upload/v1697797990/Marketing/Blog/Markdown_Cheat_Sheet.pdf).',
-                  '',
-                  '**Task:** Create a new issue in your repository!',
-                  '- Go to the **Issues** tab.', 
-                  '- Click **New Issue**.', 
-                  '- Use this exact title: **Preregistration needed**', 
-                  '- Add a brief introduction about yourself, what brings you to this workshop and what you\'re hoping to learn. Make sure to try different Markdown formatting options!', 
-                  '', 
-                  `**Afterwards:** Return to this issues and comment \`/done 4\` here: ${preregistrationUrl}`,
-                  '',
-                  `<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/create_issue.gif" alt="Make Issues GIF">`,
+            - [x] done
+            - [ ] todo
+
+            For Git's sake, put each sentence on its own line.
+            Please.
+            I beg you.
+            \`\`\`
+                `,
+                'You can find an overview of Markdown formatting options [here](https://media.datacamp.com/legacy/image/upload/v1697797990/Marketing/Blog/Markdown_Cheat_Sheet.pdf).',
+                '',
+                '**Task:** Create a new issue in your repository!',
+                '- Go to the **Issues** tab.', 
+                '- Click **New Issue**.', 
+                '- Use this exact title: **Preregistration needed**', 
+                '- Add a brief introduction about yourself, what brings you to this workshop and what you\'re hoping to learn. Make sure to try different Markdown formatting options!', 
+                '', 
+                `**Afterwards:** Return to this issues and comment \`/done 4\` here: ${preregistrationUrl}`,
+                '',
+                `<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/create_issue.gif" alt="Make Issues GIF">`,
+              ];
+
+              const newIssue = await github.rest.issues.create({
+                owner: owner,
+                repo:  repo,
+                title: 'Create your own first issue',
+                body: issueBodyLines.join('\n')
+              });
+
+              // 4) Celebrate in the upstream issue with link to new issue
+              const milestone3BodyLines = [
+                '🎉 Milestone 3 complete - "Activate issues"!',
+                '',
+                `**Task:** Milestone 4 - 🟢 Easy is now available, and an issue is waiting in your fork, look into it: ${newIssue.data.html_url}`,
+                '',
+                `**Afterwards:** Comment \`/done 4\` here.`,
                 ];
-
-                const newIssue = await retryApiCall(async () => {
-                  return await github.rest.issues.create({
-                    owner: owner,
-                    repo: repo,
-                    title: 'Create your own first issue',
-                    body: issueBodyLines.join('\n')
-                  });
-                }, 'Create first issue in fork');
-
-                // 4) Celebrate in the upstream issue
-                const milestone3BodyLines = [
-                  '✅ Milestone 3 complete - "Activate issues"!',
-                  '',
-                  `**Task:** Milestone 4 - 📝 Easy is now available, and an issue is waiting in your fork, look into it: ${newIssue.data.html_url}`,
-                  '',
-                  `**Afterwards:** Comment \`/done 4\` here.`,
-                ];
-                await retryApiCall(async () => {
-                  return await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: context.issue.number,
-                    body: milestone3BodyLines.join('\n')
-                  });
-                }, 'Post milestone 3 success comment');
-              }
-            } catch (error) {
-              console.error(`Failed to verify milestone 3: ${error.message}`);
-              try {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: `⚠️ An error occurred while verifying milestone 3. Please try again in a few moments.\n\nError: ${error.message}`
-                });
-              } catch (commentError) {
-                console.error('Failed to post error comment:', commentError);
-              }
-              core.setFailed(`Milestone 3 verification failed: ${error.message}`);
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                issue_number: context.issue.number,
+                body: milestone3BodyLines.join('\n')
+              });
             }
-
       - name: Verify milestone 4
         if: steps.parse.outputs.result == '4'
         uses: actions/github-script@v7
@@ -295,67 +173,58 @@ jobs:
         with:
           github-token: ${{ secrets.GH_PAT_CROSSREPO }}
           script: |
-            // Retry helper function
-            async function retryApiCall(apiCall, description = 'API call', maxRetries = 3) {
-              const delays = [1000, 2000, 4000];
-              
-              for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                  console.log(`Attempt ${attempt}/${maxRetries} for: ${description}`);
-                  return await apiCall();
-                } catch (error) {
-                  console.error(`Attempt ${attempt} failed:`, error.message);
-                  
-                  if (error.status === 403) {
-                    if (error.response?.headers['x-ratelimit-remaining'] === '0') {
-                      const resetTime = error.response.headers['x-ratelimit-reset'];
-                      const waitTime = Math.max(0, (resetTime * 1000) - Date.now());
-                      console.log(`Rate limited. Waiting ${waitTime}ms until reset...`);
-                      await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
-                      continue;
-                    }
-                    throw new Error(`Permission denied: ${error.message}`);
-                  }
-                  
-                  if (error.status === 404) {
-                    throw new Error(`Resource not found: ${error.message}`);
-                  }
-                  
-                  if (error.status === 422) {
-                    throw new Error(`Validation error: ${error.message}`);
-                  }
-                  
-                  if (attempt < maxRetries) {
-                    const delay = delays[attempt - 1] || 5000;
-                    console.log(`Retrying in ${delay}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                  } else {
-                    throw new Error(`All ${maxRetries} attempts failed for ${description}: ${error.message}`);
-                  }
-                }
-              }
-            }
-
             const [owner, repo] = process.env.FORK_REPO.split('/');
             const target = 'preregistration needed';
 
-            try {
-              // 1) Grab the last 10 issues (all states)
-              const { data: recent } = await retryApiCall(async () => {
-                return await github.rest.issues.listForRepo({
-                  owner, repo,
-                  state: 'all',
-                  per_page: 10,
-                  sort: 'created',
-                  direction: 'desc'
-                });
-              }, `List issues in fork ${owner}/${repo}`);
+            // 1) Grab the last 10 issues (all states)
+            const { data: recent } = await github.rest.issues.listForRepo({
+              owner, repo,
+              state: 'all',
+              per_page: 10,
+              sort: 'created',
+              direction: 'desc'
+            });
 
-              // 2) Try exact match
-              let found = recent.find(i => i.title.toLowerCase() === target);
+            // 2) Try exact match
+            let found = recent.find(i => i.title.toLowerCase() === target);
 
-              // 3) If no exact, run Levenshtein ≤3
-              if (!found) {
+            // 3) If no exact, run Levenshtein ≤3
+            if (!found) {
+              const lev = (a, b) => {
+                const dp = Array.from({ length: a.length + 1 }, () => []);
+                for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+                for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+                for (let i = 1; i <= a.length; i++) {
+                  for (let j = 1; j <= b.length; j++) {
+                    dp[i][j] = a[i-1] === b[j-1]
+                      ? dp[i-1][j-1]
+                      : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+                  }
+                }
+                return dp[a.length][b.length];
+              };
+              found = recent.find(i => lev(i.title.toLowerCase(), target) <= 3);
+            }
+
+            // 4) If still not found, check if accidentally created in upstream
+            if (!found) {
+              // Check if issue was created in main repo instead
+              const { data: upstreamIssues } = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'all',
+                per_page: 20,
+                sort: 'created',
+                direction: 'desc'
+              });
+              
+              // Check for exact match or close match in upstream
+              let foundInUpstream = upstreamIssues.find(i => 
+                i.title.toLowerCase() === target && 
+                i.user.login === context.actor
+              );
+              
+              if (!foundInUpstream) {
                 const lev = (a, b) => {
                   const dp = Array.from({ length: a.length + 1 }, () => []);
                   for (let i = 0; i <= a.length; i++) dp[i][0] = i;
@@ -369,162 +238,95 @@ jobs:
                   }
                   return dp[a.length][b.length];
                 };
-                found = recent.find(i => lev(i.title.toLowerCase(), target) <= 3);
-              }
-
-              // 4) If still not found, check if accidentally created in upstream
-              if (!found) {
-                let upstreamIssues = [];
-                try {
-                  const result = await retryApiCall(async () => {
-                    return await github.rest.issues.listForRepo({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      state: 'all',
-                      per_page: 20,
-                      sort: 'created',
-                      direction: 'desc'
-                    });
-                  }, 'List issues in upstream repo');
-                  upstreamIssues = result.data;
-                } catch (upstreamError) {
-                  console.warn('Could not check upstream issues:', upstreamError);
-                }
-                
-                // Check for exact match or close match in upstream
-                let foundInUpstream = upstreamIssues.find(i => 
-                  i.title.toLowerCase() === target && 
+                foundInUpstream = upstreamIssues.find(i => 
+                  lev(i.title.toLowerCase(), target) <= 3 && 
                   i.user.login === context.actor
                 );
-                
-                if (!foundInUpstream) {
-                  const lev = (a, b) => {
-                    const dp = Array.from({ length: a.length + 1 }, () => []);
-                    for (let i = 0; i <= a.length; i++) dp[i][0] = i;
-                    for (let j = 0; j <= b.length; j++) dp[0][j] = j;
-                    for (let i = 1; i <= a.length; i++) {
-                      for (let j = 1; j <= b.length; j++) {
-                        dp[i][j] = a[i-1] === b[j-1]
-                          ? dp[i-1][j-1]
-                          : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
-                      }
-                    }
-                    return dp[a.length][b.length];
-                  };
-                  foundInUpstream = upstreamIssues.find(i => 
-                    lev(i.title.toLowerCase(), target) <= 3 && 
-                    i.user.login === context.actor
-                  );
-                }
-                
-                // Different error messages based on where issue was found
-                if (foundInUpstream) {
-                  await retryApiCall(async () => {
-                    return await github.rest.issues.createComment({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      issue_number: context.issue.number,
-                      body: `⚠️ Milestone 4 not complete. You created the issue "${foundInUpstream.title}" in the main repository instead of your fork. Please create an issue called "Preregistration needed" in YOUR FORK (${owner}/${repo}), not in the main repository. Then run \`/done 4\` again.`
-                    });
-                  }, 'Post wrong repo error');
-                } else {
-                  await retryApiCall(async () => {
-                    return await github.rest.issues.createComment({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      issue_number: context.issue.number,
-                      body: `⚠️ Milestone 4 not complete. Please open an issue called "Preregistration needed" in your fork and then run \`/done 4\` again.`
-                    });
-                  }, 'Post missing issue error');
-                }
-                return;
               }
-
-              // 5) Cross off "4.", reveal "5."
-              const updated = context.payload.issue.body
-                .replace(/^(\s*-\s*\[)\s\](\s*4\..*)$/m, '$1x]$2')
-                + '\n- [ ] 5. Close an issue - 📝 Easy';
-
-              await retryApiCall(async () => {
-                return await github.rest.issues.update({
+              
+              // Different error messages based on where issue was found
+              if (foundInUpstream) {
+                await github.rest.issues.createComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: context.issue.number,
-                  body: updated,
-                  state: 'open'
+                  body: `❌ Milestone 4 not complete. You created the issue "${foundInUpstream.title}" in the main repository instead of your fork. Please create an issue called "Preregistration needed" in YOUR FORK (${owner}/${repo}), not in the main repository. Then run \`/done 4\` again.`
                 });
-              }, 'Update issue for milestone 4');
-
-              // 6) Celebrate
-              const forkIssues = await retryApiCall(async () => {
-                return await github.rest.issues.listForRepo({
-                  owner, repo,
-                  state: 'open',
-                  per_page: 10
-                });
-              }, 'List open issues in fork');
-              
-              const firstIssue = forkIssues.data.find(i =>
-                i.title.toLowerCase() === 'create your own first issue'
-              );
-              const firstIssueUrl = firstIssue.html_url;
-              
-              const milestone4BodyLines = [
-                '✅ Milestone 4 complete - "Open a issue"!',
-                '',
-                `**Task:** Milestone 5 - 📝 Easy is now available, go back to the issue you just solved, read the new comment, and close the issue: ${firstIssueUrl}`,
-                '',
-                'Click the "Close issue" button.',
-                '',
-                `**Afterwards:** Comment \`/done 5\` here.`,
-              ];
-              
-              await retryApiCall(async () => {
-                return await github.rest.issues.createComment({
+              } else {
+                await github.rest.issues.createComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: context.issue.number,
-                  body: milestone4BodyLines.join('\n')
+                  body: `❌ Milestone 4 not complete. Please open an issue called "Preregistration needed" in your fork and then run \`/done 4\` again.`
                 });
-              }, 'Post milestone 4 success comment');
-
-              // 7) Notify the "Create your own first issue" in the fork
-              const preregistrationUrl = context.payload.issue.html_url;
-              if (firstIssue) {
-                const milestone4NotificationBodyLines = [
-                  `@${context.actor}, you've completed milestone 4!`,
-                  '',
-                  'Imagine your collaborators saw your reminder and quickly put together a first draft of the preregistration (how efficient!).',
-                  'In the next part of the workshop, you will help refine this preregistration.',
-                  'But first, **close this issue** you since you completed the task. Closing issues when they are are no longer needed is good practice for keeping your repository organized.',
-                  '',
-                  '**Task:** Close this issue.',
-                  '',
-                  `**Afterwards:** When you closed the issue, comment \`/done 5\` here: ${preregistrationUrl}!`
-                ];
-                
-                await retryApiCall(async () => {
-                  return await github.rest.issues.createComment({
-                    owner, repo,
-                    issue_number: firstIssue.number,
-                    body: milestone4NotificationBodyLines.join('\n')
-                  });
-                }, 'Post notification in fork issue');
               }
-            } catch (error) {
-              console.error(`Milestone 4 verification failed: ${error.message}`);
-              await retryApiCall(async () => {
-                return await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: `⚠️ An error occurred. Please try again.\n\nError: ${error.message}`
-                });
-              }, 'Post error message', 1);
-              core.setFailed(`Milestone 4 failed: ${error.message}`);
+              return;
             }
 
-      # 5.1) Verify "Create your own first issue" is closed in the fork
+
+            // 5) Cross off “4.”, reveal “5.”
+            const updated = context.payload.issue.body
+              .replace(/^(\s*-\s*\[)\s\](\s*4\..*)$/m, '$1x]$2')
+              + '\n- [ ] 5. Close an issue - 🟢 Easy';
+              
+              //.replace(/\n*<img[^>]*>.*$/m, `\n- [ ] 5. Close an issue\n\n<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/close_issue.gif" alt="Close Issue GIF">`);
+
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+              body: updated,
+              state: 'open'
+            });
+
+            // 6) Celebrate
+            const forkIssues = await github.rest.issues.listForRepo({
+              owner, repo,
+              state: 'open',
+              per_page: 10
+            });
+            const firstIssue = forkIssues.data.find(i =>
+              i.title.toLowerCase() === 'create your own first issue'
+            );
+            const firstIssueUrl = firstIssue.html_url;
+            const milestone4BodyLines = [
+              '🎉 Milestone 4 complete - "Open a issue"!',
+              '',
+              `**Task:** Milestone 5 - 🟢 Easy is now available, go back to the issue you just solved, read the new comment, and close the issue: ${firstIssueUrl}`,
+              '',
+              'Click the "Close issue" button.',
+              '',
+              `**Afterwards:** Comment \`/done 5\` here.`,
+            ];
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+              body: milestone4BodyLines.join('\n')
+            });
+
+            // 7) Notify the "Create your own first issue" in the fork
+            const preregistrationUrl = context.payload.issue.html_url;
+            if (firstIssue) {
+              const milestone4NotificationBodyLines = [
+                `@${context.actor}, you've completed milestone 4!`,
+                '',
+                'Imagine your collaborators saw your reminder and quickly put together a first draft of the preregistration (how efficient!).',
+                'In the next part of the workshop, you will help refine this preregistration.',
+                'But first, **close this issue** you since you completed the task. Closing issues when they are are no longer needed is good practice for keeping your repository organized.',
+                '',
+                '**Task:** Close this issue.',
+                '',
+                `**Afterwards:** When you closed the issue, comment \`/done 5\` here: ${preregistrationUrl}!`
+              ];
+              
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: firstIssue.number,
+                body: milestone4NotificationBodyLines.join('\n')
+              });
+            }
+    # 5.1) Verify "Create your own first issue" is closed in the fork
       - name: Verify milestone 5
         id: verify-5
         if: steps.parse.outputs.result == '5'
@@ -534,102 +336,44 @@ jobs:
         with:
           github-token: ${{ secrets.GH_PAT_CROSSREPO }}
           script: |
-            // Retry helper function
-            async function retryApiCall(apiCall, description = 'API call', maxRetries = 3) {
-              const delays = [1000, 2000, 4000];
-              
-              for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                  console.log(`Attempt ${attempt}/${maxRetries} for: ${description}`);
-                  return await apiCall();
-                } catch (error) {
-                  console.error(`Attempt ${attempt} failed:`, error.message);
-                  
-                  if (error.status === 403) {
-                    if (error.response?.headers['x-ratelimit-remaining'] === '0') {
-                      const resetTime = error.response.headers['x-ratelimit-reset'];
-                      const waitTime = Math.max(0, (resetTime * 1000) - Date.now());
-                      console.log(`Rate limited. Waiting ${waitTime}ms until reset...`);
-                      await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
-                      continue;
-                    }
-                    throw new Error(`Permission denied: ${error.message}`);
-                  }
-                  
-                  if (error.status === 404) {
-                    throw new Error(`Resource not found: ${error.message}`);
-                  }
-                  
-                  if (attempt < maxRetries) {
-                    const delay = delays[attempt - 1] || 5000;
-                    console.log(`Retrying in ${delay}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                  } else {
-                    throw new Error(`All ${maxRetries} attempts failed for ${description}: ${error.message}`);
-                  }
-                }
-              }
-            }
-
             const [forkOwner, forkRepo] = process.env.FORK_REPO.split('/');
 
-            try {
-              // 1) First verify the "Create your own first issue" is closed
-              const { data: issues } = await retryApiCall(async () => {
-                return await github.rest.issues.listForRepo({
-                  owner: forkOwner, 
-                  repo: forkRepo, 
-                  state: 'all', 
-                  per_page: 100
-                });
-              }, 'List all issues in fork');
-              
-              const intro = issues.find(i =>
-                i.title.toLowerCase() === 'create your own first issue'
-              );
+            // 1) First verify the "Create your own first issue" is closed
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: forkOwner, repo: forkRepo, state: 'all', per_page: 100
+            });
+            const intro = issues.find(i =>
+              i.title.toLowerCase() === 'create your own first issue'
+            );
 
-              if (!intro || intro.state !== 'closed') {
-                const url = intro
-                  ? intro.html_url
-                  : `https://github.com/${forkOwner}/${forkRepo}/issues`;
-                await retryApiCall(async () => {
-                  return await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: context.issue.number,
-                    body: `⚠️ Milestone 5 not complete. Please close ["Create your own first issue"](${url}) in your fork, then run \`/done 5\` again.`
-                  });
-                }, 'Post milestone 5 failure comment');
-                return; // Exit early
-              }
-
-              // 2) Extract the fork SHA from the issue body
-              const issueBody = context.payload.issue.body;
-              const shaMatch = issueBody.match(/Fork sha:\s*`([a-f0-9]{40})`/);
-              if (!shaMatch) {
-                throw new Error('Could not find fork SHA in issue body');
-              }
-              const forkSha = shaMatch[1];
-
-              // 3) Store branch name for next step
-              const timestamp = Date.now();
-              const branchName = `preregistration/pr-${context.actor}-${timestamp}`;
-              core.setOutput('branch_name', branchName);
-              core.setOutput('fork_sha', forkSha);
-              core.setOutput('fork_owner', forkOwner);
-              core.setOutput('fork_repo', forkRepo);
-            } catch (error) {
-              console.error(`Milestone 5 verification failed: ${error.message}`);
-              await retryApiCall(async () => {
-                return await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: `⚠️ An error occurred during milestone 5 verification. Please try again.\n\nError: ${error.message}`
-                });
-              }, 'Post error comment', 1);
-              core.setFailed(`Milestone 5 failed: ${error.message}`);
+            if (!intro || intro.state !== 'closed') {
+              const url = intro
+                ? intro.html_url
+                : `https://github.com/${forkOwner}/${forkRepo}/issues`;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `🚫 Milestone 5 not complete. Please close ["Create your own first issue"](${url}) in your fork, then run \`/done 5\` again.`
+              });
+              return; // Exit early
             }
+
+            // 2) Extract the fork SHA from the issue body
+            const issueBody = context.payload.issue.body;
+            const shaMatch = issueBody.match(/Fork sha:\s*`([a-f0-9]{40})`/);
+            if (!shaMatch) {
+              throw new Error('Could not find fork SHA in issue body');
+            }
+            const forkSha = shaMatch[1];
+
+            // 3) Store branch name for next step
+            const timestamp = Date.now();
+            const branchName = `preregistration/pr-${context.actor}-${timestamp}`;
+            core.setOutput('branch_name', branchName);
+            core.setOutput('fork_sha', forkSha);
+            core.setOutput('fork_owner', forkOwner);
+            core.setOutput('fork_repo', forkRepo);
 
       - name: Create branch and commit with upstream permissions
         id: create-branch
@@ -638,109 +382,54 @@ jobs:
         with:
           github-token: ${{ secrets.GH_PAT_UPSTREAM }}
           script: |
-            // Retry helper function
-            async function retryApiCall(apiCall, description = 'API call', maxRetries = 3) {
-              const delays = [1000, 2000, 4000];
-              
-              for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                  console.log(`Attempt ${attempt}/${maxRetries} for: ${description}`);
-                  return await apiCall();
-                } catch (error) {
-                  console.error(`Attempt ${attempt} failed:`, error.message);
-                  
-                  if (error.status === 403) {
-                    if (error.response?.headers['x-ratelimit-remaining'] === '0') {
-                      const resetTime = error.response.headers['x-ratelimit-reset'];
-                      const waitTime = Math.max(0, (resetTime * 1000) - Date.now());
-                      console.log(`Rate limited. Waiting ${waitTime}ms until reset...`);
-                      await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
-                      continue;
-                    }
-                    throw new Error(`Permission denied: ${error.message}`);
-                  }
-                  
-                  if (error.status === 404) {
-                    throw new Error(`Resource not found: ${error.message}`);
-                  }
-                  
-                  if (attempt < maxRetries) {
-                    const delay = delays[attempt - 1] || 5000;
-                    console.log(`Retrying in ${delay}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                  } else {
-                    throw new Error(`All ${maxRetries} attempts failed for ${description}: ${error.message}`);
-                  }
-                }
-              }
-            }
+            const branchName = '${{ steps.verify-5.outputs.branch_name }}';
+            const forkSha = '${{ steps.verify-5.outputs.fork_sha }}';
+            const { data: mainRef } = await github.rest.git.getRef({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    ref: 'heads/main'
+                  });
+            const mainSha = mainRef.object.sha;
 
+            // Create branch in upstream from fork SHA
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/heads/${branchName}`,
+              sha: mainSha
+            });
+            const { data: preregistration_file } = await github.rest.repos.getContent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: 'prereg_draft.md'
+            });
+            const preregistrationContent = Buffer.from(preregistration_file.content, 'base64').toString();
+            
+            // Get current file SHA if it exists
+            let fileSha = null;
             try {
-              const branchName = '${{ steps.verify-5.outputs.branch_name }}';
-              const forkSha = '${{ steps.verify-5.outputs.fork_sha }}';
-              
-              const { data: mainRef } = await retryApiCall(async () => {
-                return await github.rest.git.getRef({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  ref: 'heads/main'
-                });
-              }, 'Get main branch reference');
-              
-              const mainSha = mainRef.object.sha;
-
-              // Create branch in upstream from fork SHA
-              await retryApiCall(async () => {
-                return await github.rest.git.createRef({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  ref: `refs/heads/${branchName}`,
-                  sha: mainSha
-                });
-              }, 'Create new branch');
-              
-              const { data: preregistration_file } = await retryApiCall(async () => {
-                return await github.rest.repos.getContent({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  path: 'prereg_draft.md'
-                });
-              }, 'Get preregistration draft file');
-              
-              const preregistrationContent = Buffer.from(preregistration_file.content, 'base64').toString();
-              
-              // Get current file SHA if it exists
-              let fileSha = null;
-              try {
-                const { data: file } = await github.rest.repos.getContent({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  path: 'preregistration.md',
-                  ref: branchName
-                });
-                fileSha = file.sha;
-              } catch (e) {
-                // File doesn't exist, which is fine
-              }
-              
-              // Overwrite the file
-              await retryApiCall(async () => {
-                return await github.rest.repos.createOrUpdateFileContents({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  path: 'preregistration.md',
-                  message: `Update preregistration for ${context.actor}`,
-                  content: Buffer.from(preregistrationContent).toString('base64'),
-                  branch: branchName,
-                  sha: fileSha
-                });
-              }, 'Create/update preregistration file');
-              
-              core.setOutput('branch_name', branchName);
-            } catch (error) {
-              console.error(`Failed to create branch: ${error.message}`);
-              core.setFailed(`Branch creation failed: ${error.message}`);
+              const { data: file } = await github.rest.repos.getContent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: 'preregistration.md',
+                ref: branchName
+              });
+              fileSha = file.sha;
+            } catch (e) {
+              // File doesn't exist, which is fine
             }
+            
+            // Overwrite the file
+            await github.rest.repos.createOrUpdateFileContents({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: 'preregistration.md',
+              message: `Update preregistration for ${context.actor}`,
+              content: Buffer.from(preregistrationContent).toString('base64'),
+              branch: branchName,
+              sha: fileSha
+            });
+              core.setOutput('branch_name', branchName);
 
       - name: Create PR and update issue
         if: steps.parse.outputs.result == '5' && steps.create-branch.outputs.branch_name
@@ -748,177 +437,123 @@ jobs:
         with:
           github-token: ${{ secrets.GH_PAT_CROSSREPO }}
           script: |
-            // Retry helper function
-            async function retryApiCall(apiCall, description = 'API call', maxRetries = 3) {
-              const delays = [1000, 2000, 4000];
-              
-              for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                  console.log(`Attempt ${attempt}/${maxRetries} for: ${description}`);
-                  return await apiCall();
-                } catch (error) {
-                  console.error(`Attempt ${attempt} failed:`, error.message);
-                  
-                  if (error.status === 403) {
-                    if (error.response?.headers['x-ratelimit-remaining'] === '0') {
-                      const resetTime = error.response.headers['x-ratelimit-reset'];
-                      const waitTime = Math.max(0, (resetTime * 1000) - Date.now());
-                      console.log(`Rate limited. Waiting ${waitTime}ms until reset...`);
-                      await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
-                      continue;
-                    }
-                    throw new Error(`Permission denied: ${error.message}`);
-                  }
-                  
-                  if (error.status === 404) {
-                    throw new Error(`Resource not found: ${error.message}`);
-                  }
-                  
-                  if (error.status === 422) {
-                    throw new Error(`Validation error: ${error.message}`);
-                  }
-                  
-                  if (attempt < maxRetries) {
-                    const delay = delays[attempt - 1] || 5000;
-                    console.log(`Retrying in ${delay}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                  } else {
-                    throw new Error(`All ${maxRetries} attempts failed for ${description}: ${error.message}`);
+            const branchName = '${{ steps.verify-5.outputs.branch_name }}';
+            const forkOwner = '${{ steps.verify-5.outputs.fork_owner }}';
+            const forkRepo = '${{ steps.verify-5.outputs.fork_repo }}';
+
+            // Find the user's created issue with Levenshtein logic
+            const target = 'preregistration needed';
+
+            // 1) Grab the last 10 issues (all states)
+            const { data: recent } = await github.rest.issues.listForRepo({
+              owner: forkOwner,
+              repo: forkRepo,
+              state: 'all',
+              per_page: 10,
+              sort: 'created',
+              direction: 'desc'
+            });
+
+            // 2) Try exact match
+            let preregIssue = recent.find(i => i.title.toLowerCase() === target);
+
+            // 3) If no exact, run Levenshtein ≤3
+            if (!preregIssue) {
+              const lev = (a, b) => {
+                const dp = Array.from({ length: a.length + 1 }, () => []);
+                for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+                for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+                for (let i = 1; i <= a.length; i++) {
+                  for (let j = 1; j <= b.length; j++) {
+                    dp[i][j] = a[i-1] === b[j-1]
+                      ? dp[i-1][j-1]
+                      : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
                   }
                 }
-              }
+                return dp[a.length][b.length];
+              };
+              preregIssue = recent.find(i => lev(i.title.toLowerCase(), target) <= 3);
             }
 
-            try {
-              const branchName = '${{ steps.verify-5.outputs.branch_name }}';
-              const forkOwner = '${{ steps.verify-5.outputs.fork_owner }}';
-              const forkRepo = '${{ steps.verify-5.outputs.fork_repo }}';
+            // Get fork's default branch
+            const { data: forkData } = await github.rest.repos.get({
+              owner: forkOwner,
+              repo: forkRepo
+            });
+            const forkDefaultBranch = forkData.default_branch;
 
-              // Find the user's created issue with Levenshtein logic
-              const target = 'preregistration needed';
+            const prBodyLines = [
+              '### Congratulations on completing milestone 5!',
+              '',
+              'Next, we\'ll have a look at the draft of the preregistration that your (imaginary) collaborators have prepared.',
+              'But before doing so, let\'s learn how this situation came about.', 
+              '', 
+              'To do so, we need to introduce **branches**. Branches allow collaborators to work independently yet simultaneously on the same project.',
+              'How? Each branch is a parallel version of the project where changes can be made without affecting the official version of the project.',
+              'The **main branch** usually represents the official version of the project, i.e., the one that reflects the current consensus.', 
+              'For example, each collaborator might use their own branch to draft sections of a paper, experiment with changes, or revise text without disrupting others\' work.',
+              '', 
+              'Once work in a branch is ready, your collaborators (or you) can create a **pull request (PR)**, which is the main tool for requesting feedback on GitHub.', 
+              'A pull request shows the changes made in a branch line-by-line and invites collaborators to review, discuss, and suggest improvements.', 
+              'When the changes are deemed good, they can be added to the official version.', 
+              'This step is called **merging**: it combines the separate branch with the main branch so that both contain the same version of the project.',
+              '', 
+              'You\’re now inside such a pull request: Your collaborators are waiting for your feedback on their preregistration draft.',
+              `This PR closes #${preregIssue.number} (${preregIssue.title}).`,
+              '', 
+              '**Task:** Suggest a change to the preregistration file',
+              '- Go to the **Files changed** tab of this PR.',
+              '- Find the typo in line 12 (empierically).', 
+              '- Suggest a correction by clicking the "+" symbol next to the line, typing the correction, and submitting your suggestion.',
+              '', 
+              `**Afterwards**: Once you\'ve suggested your change, return to ${context.payload.issue.html_url} and comment \`/done 6\` to continue`,
+              '',
+              '<img src="https://raw.githubusercontent.com/aaronpeikert/repro-collab/main/assets/make_suggestion.gif" alt="Make Suggestion GIF">'
+            ];
 
-              // 1) Grab the last 10 issues (all states)
-              const { data: recent } = await retryApiCall(async () => {
-                return await github.rest.issues.listForRepo({
-                  owner: forkOwner,
-                  repo: forkRepo,
-                  state: 'all',
-                  per_page: 10,
-                  sort: 'created',
-                  direction: 'desc'
-                });
-              }, 'List recent issues in fork');
-
-              // 2) Try exact match
-              let preregIssue = recent.find(i => i.title.toLowerCase() === target);
-
-              // 3) If no exact, run Levenshtein ≤3
-              if (!preregIssue) {
-                const lev = (a, b) => {
-                  const dp = Array.from({ length: a.length + 1 }, () => []);
-                  for (let i = 0; i <= a.length; i++) dp[i][0] = i;
-                  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
-                  for (let i = 1; i <= a.length; i++) {
-                    for (let j = 1; j <= b.length; j++) {
-                      dp[i][j] = a[i-1] === b[j-1]
-                        ? dp[i-1][j-1]
-                        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
-                    }
-                  }
-                  return dp[a.length][b.length];
-                };
-                preregIssue = recent.find(i => lev(i.title.toLowerCase(), target) <= 3);
-              }
-
-              // Get fork's default branch
-              const { data: forkData } = await retryApiCall(async () => {
-                return await github.rest.repos.get({
-                  owner: forkOwner,
-                  repo: forkRepo
-                });
-              }, 'Get fork repository data');
+            // Create PR from upstream branch to fork
+            const { data: pr } = await github.rest.pulls.create({
+              owner: forkOwner,
+              repo: forkRepo,
+              title: 'Review this preregistration update',
+              head: `${context.repo.owner}:${branchName}`,
+              base: forkDefaultBranch,
+              body: prBodyLines.join('\n'),
+              maintainer_can_modify: true
+            });
               
-              const forkDefaultBranch = forkData.default_branch;
+            // Update the upstream issue checklist
+            const updatedBody5 = context.payload.issue.body
+                .replace(/^(\s*-\s*\[)\s\](\s*5\..*)$/m, '$1x]$2')
+                + '\n- [ ] 6. Add a suggestion to the PR - 🟡 Medium';
 
-              const prBodyLines = [
-                '### Congratulations on completing milestone 5!',
-                '',
-                'Next, we\'ll have a look at the draft of the preregistration that your (imaginary) collaborators have prepared.',
-                'But before doing so, let\'s learn how this situation came about.', 
-                '', 
-                'To do so, we need to introduce **branches**. Branches allow collaborators to work independently yet simultaneously on the same project.',
-                'How? Each branch is a parallel version of the project where changes can be made without affecting the official version of the project.',
-                'The **main branch** usually represents the official version of the project, i.e., the one that reflects the current consensus.', 
-                'For example, each collaborator might use their own branch to draft sections of a paper, experiment with changes, or revise text without disrupting others\' work.',
-                '', 
-                'Once work in a branch is ready, your collaborators (or you) can create a **pull request (PR)**, which is the main tool for requesting feedback on GitHub.', 
-                'A pull request shows the changes made in a branch line-by-line and invites collaborators to review, discuss, and suggest improvements.', 
-                'When the changes are deemed good, they can be added to the official version.', 
-                'This step is called **merging**: it combines the separate branch with the main branch so that both contain the same version of the project.',
-                '', 
-                'You\'re now inside such a pull request: Your collaborators are waiting for your feedback on their preregistration draft.',
-                `This PR closes #${preregIssue.number} (${preregIssue.title}).`,
-                '', 
-                '**Task:** Suggest a change to the preregistration file',
-                '- Go to the **Files changed** tab of this PR.',
-                '- Find the typo in line 12 (empierically).', 
-                '- Suggest a correction by clicking the "+" symbol next to the line, typing the correction, and submitting your suggestion.',
-                '', 
-                `**Afterwards**: Once you\'ve suggested your change, return to ${context.payload.issue.html_url} and comment \`/done 6\` to continue`,
-                '',
-                '<img src="https://raw.githubusercontent.com/aaronpeikert/repro-collab/main/assets/make_suggestion.gif" alt="Make Suggestion GIF">'
-              ];
+                //.replace(/\n*<img[^>]*>.*$/m, `\n- [ ] 6. Review and merge a PR\n\n<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/review_pr.gif" alt="Review PR GIF">`);
+              
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: updatedBody5,
+              state: 'open'
+            });
 
-              // Create PR from upstream branch to fork
-              const { data: pr } = await retryApiCall(async () => {
-                return await github.rest.pulls.create({
-                  owner: forkOwner,
-                  repo: forkRepo,
-                  title: 'Review this preregistration update',
-                  head: `${context.repo.owner}:${branchName}`,
-                  base: forkDefaultBranch,
-                  body: prBodyLines.join('\n'),
-                  maintainer_can_modify: true
-                });
-              }, 'Create pull request in fork');
-                
-              // Update the upstream issue checklist
-              const updatedBody5 = context.payload.issue.body
-                  .replace(/^(\s*-\s*\[)\s\](\s*5\..*)$/m, '$1x]$2')
-                  + '\n- [ ] 6. Add a suggestion to the PR - 🔧 Medium';
-                
-              await retryApiCall(async () => {
-                return await github.rest.issues.update({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: updatedBody5,
-                  state: 'open'
-                });
-              }, 'Update issue for milestone 5');
-
-              // Comment on the upstream issue
-              const milestone5BodyLines = [
-                '✅ Milestone 5 complete - "Close an issue"!',
-                '',
-                `**Task:** Milestone 6 - 🔧 Medium is now available. Review the pull request (PR) I created in your fork: ${pr.html_url}`,
-                '',
-                'Add a suggestion to improve the code using GitHub\'s suggestion feature, more detail in our PR.',
-                '',
-                `**Afterwards:** Comment \`/done 6\` here.`,
-              ];
-              await retryApiCall(async () => {
-                return await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: milestone5BodyLines.join('\n')
-                });
-              }, 'Post milestone 5 success comment');
-            } catch (error) {
-              console.error(`Failed to create PR: ${error.message}`);
-              core.setFailed(`PR creation failed: ${error.message}`);
-            }
+            // Comment on the upstream issue
+            const milestone5BodyLines = [
+              '🎉 Milestone 5 complete - "Close an issue"!',
+              '',
+              `**Task:** Milestone 6 - 🟡 Medium is now available. Review the pull request (PR) I created in your fork: ${pr.html_url}`,
+              '',
+              'Add a suggestion to improve the code using GitHub\'s suggestion feature, more detail in our PR.',
+              '',
+              `**Afterwards:** Comment \`/done 6\` here.`,
+            ];
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: milestone5BodyLines.join('\n')
+            });
+            
 
       - name: Add a PR Suggestion
         if: steps.parse.outputs.result == '6'
@@ -928,159 +563,101 @@ jobs:
         with:
           github-token: ${{ secrets.GH_PAT_CROSSREPO }}
           script: |
-            // Retry helper function
-            async function retryApiCall(apiCall, description = 'API call', maxRetries = 3) {
-              const delays = [1000, 2000, 4000];
-              
-              for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                  console.log(`Attempt ${attempt}/${maxRetries} for: ${description}`);
-                  return await apiCall();
-                } catch (error) {
-                  console.error(`Attempt ${attempt} failed:`, error.message);
-                  
-                  if (error.status === 403) {
-                    if (error.response?.headers['x-ratelimit-remaining'] === '0') {
-                      const resetTime = error.response.headers['x-ratelimit-reset'];
-                      const waitTime = Math.max(0, (resetTime * 1000) - Date.now());
-                      console.log(`Rate limited. Waiting ${waitTime}ms until reset...`);
-                      await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
-                      continue;
-                    }
-                    throw new Error(`Permission denied: ${error.message}`);
-                  }
-                  
-                  if (error.status === 404) {
-                    throw new Error(`Resource not found: ${error.message}`);
-                  }
-                  
-                  if (attempt < maxRetries) {
-                    const delay = delays[attempt - 1] || 5000;
-                    console.log(`Retrying in ${delay}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                  } else {
-                    throw new Error(`All ${maxRetries} attempts failed for ${description}: ${error.message}`);
-                  }
-                }
-              }
-            }
-
             const [owner, repo] = process.env.FORK_REPO.split('/');
             
-            try {
-              // Find the PR we created
-              const { data: prs } = await retryApiCall(async () => {
-                return await github.rest.pulls.list({
-                  owner, repo,
-                  state: 'all',
-                  per_page: 20,
-                  sort: 'created',
-                  direction: 'desc'
-                });
-              }, 'List pull requests');
-              
-              const pr = prs.find(pr =>
-                pr.title === 'Review this preregistration update'
-              );
-              
-              if (!pr) {
-                await retryApiCall(async () => {
-                  return await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: context.issue.number,
-                    body: '⚠️ Could not find the PR. Please check your fork for the preregistration PR.'
-                  });
-                }, 'Post PR not found error');
-                return;
-              }
-              
-              // Check for review comments with suggestions
-              const { data: reviews } = await retryApiCall(async () => {
-                return await github.rest.pulls.listReviews({
-                  owner, repo,
-                  pull_number: pr.number
-                });
-              }, 'List PR reviews');
-              
-              let hasSuggestion = false;
-              for (const review of reviews) {
-                const { data: comments } = await retryApiCall(async () => {
-                  return await github.rest.pulls.listCommentsForReview({
-                    owner, repo,
-                    pull_number: pr.number,
-                    review_id: review.id
-                  });
-                }, `List comments for review ${review.id}`);
-                
-                if (comments.some(c => c.body.includes('```suggestion'))) {
-                  hasSuggestion = true;
-                  break;
-                }
-              }
-              
-              // Also check single comments
-              if (!hasSuggestion) {
-                const { data: prComments } = await retryApiCall(async () => {
-                  return await github.rest.pulls.listReviewComments({
-                    owner, repo,
-                    pull_number: pr.number
-                  });
-                }, 'List PR review comments');
-                
-                hasSuggestion = prComments.some(c => c.body.includes('```suggestion'));
-              }
-              
-              if (!hasSuggestion) {
-                await retryApiCall(async () => {
-                  return await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: context.issue.number,
-                    body: `⚠️ Milestone 6 not complete. Please add a suggestion to the PR using GitHub's suggestion feature. Go to the "Files changed" tab in your PR: ${pr.html_url}, click on a line and add a suggestion, then run \`/done 6\` again.`
-                  });
-                }, 'Post missing suggestion error');
-                return;
-              }
-              
-              // Update issue body
-              const updatedBody6 = context.payload.issue.body
-                .replace(/^(\s*-\s*\[)\s\](\s*6\..*)$/m, '$1x]$2')
-                + '\n- [ ] 7. Merge the pull request - 🔧 Medium';
-              
-              await retryApiCall(async () => {
-                return await github.rest.issues.update({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: updatedBody6,
-                  state: 'open'
-                });
-              }, 'Update issue for milestone 6');
-              
-              // Success comment
-              const milestone6BodyLines = [
-                '✅ Milestone 6 complete - "Add a PR suggestion"!',
-                '',
-                `**Task:** Milestone 7 - 🔧 Medium is now available. Time to merge your pull request: ${pr.html_url}`,
-                '',
-                'Click the "Merge pull request" button to complete the PR workflow.',
-                '',
-                `**Afterwards**: comment \`/done 7\` here.`
-              ];
-              await retryApiCall(async () => {
-                return await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: milestone6BodyLines.join('\n')
-                });
-              }, 'Post milestone 6 success comment');
-            } catch (error) {
-              console.error(`Milestone 6 verification failed: ${error.message}`);
-              core.setFailed(`Milestone 6 failed: ${error.message}`);
+            // Find the PR we created
+            const { data: prs } = await github.rest.pulls.list({
+              owner, repo,
+              state: 'all',
+              per_page: 20,
+              sort: 'created',
+              direction: 'desc'
+            });
+            
+            const pr = prs.find(pr =>
+              pr.title === 'Review this preregistration update'
+            );
+            
+            if (!pr) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: '🚫 Could not find the PR. Please check your fork for the preregistration PR.'
+              });
+              return;
             }
-
+            
+            // Check for review comments with suggestions
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner, repo,
+              pull_number: pr.number
+            });
+            
+            let hasSuggestion = false;
+            for (const review of reviews) {
+              const { data: comments } = await github.rest.pulls.listCommentsForReview({
+                owner, repo,
+                pull_number: pr.number,
+                review_id: review.id
+              });
+              
+              if (comments.some(c => c.body.includes('```suggestion'))) {
+                hasSuggestion = true;
+                break;
+              }
+            }
+            
+            // Also check single comments
+            if (!hasSuggestion) {
+              const { data: prComments } = await github.rest.pulls.listReviewComments({
+                owner, repo,
+                pull_number: pr.number
+              });
+              
+              hasSuggestion = prComments.some(c => c.body.includes('```suggestion'));
+            }
+            
+            if (!hasSuggestion) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `🚫 Milestone 6 not complete. Please add a suggestion to the PR using GitHub's suggestion feature. Go to the "Files changed" tab in your PR: ${pr.html_url}, click on a line and add a suggestion, then run \`/done 6\` again.`
+              });
+              return;
+            }
+            
+            // Update issue body
+            const updatedBody6 = context.payload.issue.body
+              .replace(/^(\s*-\s*\[)\s\](\s*6\..*)$/m, '$1x]$2')
+              + '\n- [ ] 7. Merge the pull request - 🟡 Medium';
+            
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: updatedBody6,
+              state: 'open'
+            });
+            
+            // Success comment
+            const milestone6BodyLines = [
+              '🎉 Milestone 6 complete - "Add a PR suggestion"!',
+              '',
+              `**Task:** Milestone 7 - 🟡 Medium is now available. Time to merge your pull request: ${pr.html_url}`,
+              '',
+              'Click the "Merge pull request" button to complete the PR workflow.',
+              '',
+              `**Afterwards**: comment \`/done 7\` here.`
+            ];
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: milestone6BodyLines.join('\n')
+            });
+ 
       - name: Merge PR
         if: steps.parse.outputs.result == '7'
         uses: actions/github-script@v7
@@ -1089,148 +666,81 @@ jobs:
         with:
           github-token: ${{ secrets.GH_PAT_CROSSREPO }}
           script: |
-            // Retry helper function
-            async function retryApiCall(apiCall, description = 'API call', maxRetries = 3) {
-              const delays = [1000, 2000, 4000];
-              
-              for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                  console.log(`Attempt ${attempt}/${maxRetries} for: ${description}`);
-                  return await apiCall();
-                } catch (error) {
-                  console.error(`Attempt ${attempt} failed:`, error.message);
-                  
-                  if (error.status === 403) {
-                    if (error.response?.headers['x-ratelimit-remaining'] === '0') {
-                      const resetTime = error.response.headers['x-ratelimit-reset'];
-                      const waitTime = Math.max(0, (resetTime * 1000) - Date.now());
-                      console.log(`Rate limited. Waiting ${waitTime}ms until reset...`);
-                      await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
-                      continue;
-                    }
-                    throw new Error(`Permission denied: ${error.message}`);
-                  }
-                  
-                  if (error.status === 404) {
-                    // Don't throw for 404, just return false
-                    return false;
-                  }
-                  
-                  if (attempt < maxRetries) {
-                    const delay = delays[attempt - 1] || 5000;
-                    console.log(`Retrying in ${delay}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                  } else {
-                    throw new Error(`All ${maxRetries} attempts failed for ${description}: ${error.message}`);
-                  }
-                }
-              }
-            }
-
             const [owner, repo] = process.env.FORK_REPO.split('/');
             
+            // Check if preregistration.md file exists in the fork
+            let preregExists = false;
             try {
-              // Check if preregistration.md file exists in the fork
-              let preregExists = false;
-              const result = await retryApiCall(async () => {
-                const { data: file } = await github.rest.repos.getContent({
-                  owner, repo,
-                  path: 'preregistration.md'
-                });
-                return true;
-              }, 'Check if preregistration.md exists');
-              
-              preregExists = result || false;
-              
-              if (!preregExists) {
-                // Find the PR URL
-                const { data: prs } = await retryApiCall(async () => {
-                  return await github.rest.pulls.list({
-                    owner, repo,
-                    state: 'all',
-                    per_page: 20,
-                    sort: 'created',
-                    direction: 'desc'
-                  });
-                }, 'List PRs to find URL');
-                
-                const ourPr = prs.find(pr =>
-                  pr.title === 'Review this preregistration update'
-                );
-                
-                const prUrl = ourPr ? ourPr.html_url : `https://github.com/${owner}/${repo}/pulls`;
-                
-                await retryApiCall(async () => {
-                  return await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: context.issue.number,
-                    body: `⚠️ Milestone 7 not complete. Please merge or close the pull request: ${prUrl}. Make sure all checks have passed, then click "Merge pull request" and run \`/done 7\` again.`
-                  });
-                }, 'Post milestone 7 failure comment');
-                return;
-              }
-              
-              // Cross off "7.", reveal "8."
-              const updatedBody7 = context.payload.issue.body
-                .replace(/^(\s*-\s*\[)\s\](\s*7\..*)$/m, '$1x]$2')
-                + '\n- [ ] 8. Find your group - 📝 Easy';
-              
-              await retryApiCall(async () => {
-                return await github.rest.issues.update({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: updatedBody7,
-                  state: 'open'
-                });
-              }, 'Update issue for milestone 7');
-              
-              // Final success comment
-              const workshopCompleteLines = [
-                `✅ **Congratulations @${context.actor}!** ✅`,
-                '',
-                'You completed everything you can do alone:',
-                '',
-                'You\'ve mastered:',
-                '- ✓ Forking repositories',
-                '- ✓ Handling issues',
-                '- ✓ Reviewing & merging PRs',
-                '',
-                'Now you need a partner. The goal of the next task is to find a partner with a different experience level.',
-                '',
-                '---',
-                '',
-                '**Task**: Stand up and move to the marked corner.',
-                '',
-                '1. 🔸 Form a line.',
-                '2. 🔸 Discuss with your neighbor the following questions:',
-                '    * What makes an ideal issue?',
-                '    * How can issues be used to organize tasks and responsibilities?',
-                '    * Imagine you want to give feedback to your student, collaborator, etc. how do usually provide it? How could you use GitHub?',
-                '    * What can you use PRs for?',
-                '    * What aspects of your workflow are difficult to translate to GitHub?',
-                '3. 🔸 When you are done with the discussion, move down to the other end of the line and chose a partner',
-                '4. 🔸 Participate in their discussion till the time is up.',
-                '',
-                `<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/pair-finding.svg" alt="Visual explanation of the partner finding exercise.">`,
-                '',
-                `**Afterwards**: comment \`/done 8\` here.`
+              const { data: file } = await github.rest.repos.getContent({
+                owner, repo,
+                path: 'preregistration.md'
+              });
+              preregExists = true;
+            } catch (error) {
+              // File doesn't exist
+            }
+            
+            if (!preregExists) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `🚫 Milestone 7 not complete. Please merge or close the pull request: ${ourPr.html_url}. Make sure all checks have passed, then click "Merge pull request" and run \`/done 7\` again.`
+              });
+              return;
+            }
+            
+            // Cross off “7.”, reveal “8.”
+            const updatedBody7 = context.payload.issue.body
+              .replace(/^(\s*-\s*\[)\s\](\s*7\..*)$/m, '$1x]$2')
+              + '\n- [ ] 8. Find your group - 🟢 Easy';
+            
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: updatedBody7,
+              state: 'open'
+            });
+            
+            // Final success comment
+            const workshopCompleteLines = [
+              `🎉 **Congratulations @${context.actor}!** 🎉`,
+              '',
+              'You completed everything you can do alone:',
+              '',
+              'You\'ve mastered:',
+              '- ✅ Forking repositories',
+              '- ✅ Handling issues',
+              '- ✅ Reviewing & merging PRs',
+              '',
+              'Now you need a partner. The goal of the next task is to find a partner with a different experience level.',
+              '',
+              '---',
+              '',
+              '**Task**: Stand up and move to the marked corner.',
+              '',
+              '1. ➡️ Form a line.',
+              '2. ➡️ Discuss with your neighbor the following questions:',
+              '    * What makes an ideal issue?',
+              '    * How can issues be used to organize tasks and responsibilities?',
+              '    * Imagine you want to give feedback to your student, collaborator, etc. how do usually provide it? How could you use GitHub?',
+              '    * What can you use PRs for?',
+              '    * What aspects of your workflow are difficult to translate to GitHub?',
+              '3. ➡️ When you are done with the discussion, move down to the other end of the line and chose a partner',
+              '4. ➡️ Participate in their discussion till the time is up.',
+              '',
+              `<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/pair-finding.svg" alt="Visual explanation of the partner finding exercise.">`,
+              '',
+              `**Afterwards**: comment \`/done 8\` here.`
               ];
 
-              await retryApiCall(async () => {
-                return await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: workshopCompleteLines.join('\n')
-                });
-              }, 'Post milestone 7 success comment');
-            } catch (error) {
-              console.error(`Milestone 7 verification failed: ${error.message}`);
-              core.setFailed(`Milestone 7 failed: ${error.message}`);
-            }
-
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: workshopCompleteLines.join('\n')
+            });
       # Milestone 8: Build groups
       - name: Verify milestone 8
         if: steps.parse.outputs.result == '8'
@@ -1240,128 +750,81 @@ jobs:
         with:
           github-token: ${{ secrets.GH_PAT_CROSSREPO }}
           script: |
-            // Retry helper function
-            async function retryApiCall(apiCall, description = 'API call', maxRetries = 3) {
-              const delays = [1000, 2000, 4000];
-              
-              for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                  console.log(`Attempt ${attempt}/${maxRetries} for: ${description}`);
-                  return await apiCall();
-                } catch (error) {
-                  console.error(`Attempt ${attempt} failed:`, error.message);
-                  
-                  if (error.status === 403) {
-                    if (error.response?.headers['x-ratelimit-remaining'] === '0') {
-                      const resetTime = error.response.headers['x-ratelimit-reset'];
-                      const waitTime = Math.max(0, (resetTime * 1000) - Date.now());
-                      console.log(`Rate limited. Waiting ${waitTime}ms until reset...`);
-                      await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
-                      continue;
-                    }
-                    throw new Error(`Permission denied: ${error.message}`);
-                  }
-                  
-                  if (error.status === 404) {
-                    throw new Error(`Resource not found: ${error.message}`);
-                  }
-                  
-                  if (attempt < maxRetries) {
-                    const delay = delays[attempt - 1] || 5000;
-                    console.log(`Retrying in ${delay}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                  } else {
-                    throw new Error(`All ${maxRetries} attempts failed for ${description}: ${error.message}`);
-                  }
-                }
-              }
-            }
+            // Cross off "8.", reveal "9."
+            const updatedBody8 = context.payload.issue.body
+              .replace(/^(\s*-\s*\[)\s\](\s*8\..*)$/m, '$1x]$2')
+              + '\n- [ ] 9. Generate and Upload Steven Data - 🔴 Hard';
+            
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: updatedBody8,
+              state: 'open'
+            });
+            
+            // Create data generation issue in the fork
+            const [owner, repo] = process.env.FORK_REPO.split('/');
+            const preregistrationUrl = context.payload.issue.html_url;
+            
+            const dataGenIssue = await github.rest.issues.create({
+              owner, repo,
+              title: 'Generate and add research data',
+              body: [
+                '## Partner Task: Generate and add data',
+                '',
+                '### Step 1: Generate Data',
+                `Visit [experiment](https://${context.repo.owner}.github.io/${context.repo.repo}/steven) → Generate 20+ trials together`,
+                '',
+                '### Step 2: Upload to less experienced partner\'s fork',
+                '**Note:** GitHub cannot create empty folders - you must upload files to create the folder',
+                '',
+                '**Option A - VS Code Web (if familiar with VS Code):**',
+                '1. Press `.` key on your fork\'s main page (or replace github.com → github.dev)',
+                '2. Create folder: Right-click → New Folder → name it `data`',
+                '3. Upload files: Right-click `data` folder → Upload...',
+                '4. Commit: Source Control icon → add message → commit',
+                '',
+                '**Option B - Direct upload (if not using VS Code):**',
+                '1. Download CSV files from experiment to your computer',
+                '2. Create a local folder named `data` on your computer',
+                '3. Put CSV files inside this `data` folder',
+                '4. Go to fork → Add file → Upload files',
+                '5. Drag the entire `data` folder to upload area',
+                '6. Add commit message → Commit changes',
+                '',
+                `<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/data_PR.gif" alt="Make Issues GIF">`,
+                '',
+                '### Step 3: Close this issue',
+                `Then return to ${preregistrationUrl} and comment \`/done 9\``,
+              ].join('\n')
+            });
 
-            try {
-              // Cross off "8.", reveal "9."
-              const updatedBody8 = context.payload.issue.body
-                .replace(/^(\s*-\s*\[)\s\](\s*8\..*)$/m, '$1x]$2')
-                + '\n- [ ] 9. Generate and Upload Steven Data - 🔥 Hard';
-              
-              await retryApiCall(async () => {
-                return await github.rest.issues.update({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: updatedBody8,
-                  state: 'open'
-                });
-              }, 'Update issue for milestone 8');
-              
-              // Create data generation issue in the fork
-              const [owner, repo] = process.env.FORK_REPO.split('/');
-              const preregistrationUrl = context.payload.issue.html_url;
-              
-              const dataGenIssue = await retryApiCall(async () => {
-                return await github.rest.issues.create({
-                  owner, repo,
-                  title: 'Generate and add research data',
-                  body: [
-                    '## Partner Task: Generate and add data',
-                    '',
-                    '### Step 1: Generate Data',
-                    `Visit [experiment](https://${context.repo.owner}.github.io/${context.repo.repo}/steven) → Generate 20+ trials together`,
-                    '',
-                    '### Step 2: Upload to less experienced partner\'s fork',
-                    '**Note:** GitHub cannot create empty folders - you must upload files to create the folder',
-                    '',
-                    '**Option A - VS Code Web (if familiar with VS Code):**',
-                    '1. Press `.` key on your fork\'s main page (or replace github.com → github.dev)',
-                    '2. Create folder: Right-click → New Folder → name it `data`',
-                    '3. Upload files: Right-click `data` folder → Upload...',
-                    '4. Commit: Source Control icon → add message → commit',
-                    '',
-                    '**Option B - Direct upload (if not using VS Code):**',
-                    '1. Download CSV files from experiment to your computer',
-                    '2. Create a local folder named `data` on your computer',
-                    '3. Put CSV files inside this `data` folder',
-                    '4. Go to fork → Add file → Upload files',
-                    '5. Drag the entire `data` folder to upload area',
-                    '6. Add commit message → Commit changes',
-                    '',
-                    `<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/data_PR.gif" alt="Make Issues GIF">`,
-                    '',
-                    '### Step 3: Close this issue',
-                    `Then return to ${preregistrationUrl} and comment \`/done 9\``,
-                  ].join('\n')
-                });
-              }, 'Create data generation issue');
-              
-              // Success comment with link to the data generation issue
-              const milestone8BodyLines = [
-                '✅ Great that you found your partner!',
-                '',
-                '**Milestone 9 - 🔥 Hard is now available: Generate data together**',
-                '',
-                'In this milestone, you will:',
-                '1. Use a Shiny app to gather data',
-                '2. Upload the data to the **less experienced** partner\'s fork',
-                '3. Collaborate on managing the data',
-                '',
-                '**Important:** Only the less experienced GitHub user should run `/done 9` after completing all tasks.',
-                '',
-                `📋 I've created a detailed guide for generating and uploading data in your fork: ${dataGenIssue.data.html_url}`,
-                '',
-                'Please read it carefully with your partner before proceeding.'
-              ];
-              
-              await retryApiCall(async () => {
-                return await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: milestone8BodyLines.join('\n')
-                });
-              }, 'Post milestone 8 success comment');
-            } catch (error) {
-              console.error(`Milestone 8 verification failed: ${error.message}`);
-              core.setFailed(`Milestone 8 failed: ${error.message}`);
-            }
+            
+            // Success comment with link to the data generation issue
+            const milestone8BodyLines = [
+              '🎉 Great that you found your partner!',
+              '',
+              '**Milestone 9 - 🔴 Hard is now available: Generate data together**',
+              '',
+              'In this milestone, you will:',
+              '1. Use a Shiny app to gather data',
+              '2. Upload the data to the **less experienced** partner\'s fork',
+              '3. Collaborate on managing the data',
+              '',
+              '**Important:** Only the less experienced GitHub user should run `/done 9` after completing all tasks.',
+              '',
+              `📋 I've created a detailed guide for generating and uploading data in your fork: ${dataGenIssue.data.html_url}`,
+              '',
+              'Please read it carefully with your partner before proceeding.'
+            ];
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: milestone8BodyLines.join('\n')
+            });
 
       # Milestone 9: Generate and upload data + Auto-trigger Milestone 10
       - name: Verify milestone 9 and auto-trigger milestone 10
@@ -1372,382 +835,273 @@ jobs:
         with:
           github-token: ${{ secrets.GH_PAT_CROSSREPO }}
           script: |
-            // Retry helper function
-            async function retryApiCall(apiCall, description = 'API call', maxRetries = 3) {
-              const delays = [1000, 2000, 4000];
-              
-              for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                  console.log(`Attempt ${attempt}/${maxRetries} for: ${description}`);
-                  return await apiCall();
-                } catch (error) {
-                  console.error(`Attempt ${attempt} failed:`, error.message);
-                  
-                  if (error.status === 403) {
-                    if (error.response?.headers['x-ratelimit-remaining'] === '0') {
-                      const resetTime = error.response.headers['x-ratelimit-reset'];
-                      const waitTime = Math.max(0, (resetTime * 1000) - Date.now());
-                      console.log(`Rate limited. Waiting ${waitTime}ms until reset...`);
-                      await new Promise(resolve => setTimeout(resolve, waitTime + 1000));
-                      continue;
-                    }
-                    throw new Error(`Permission denied: ${error.message}`);
-                  }
-                  
-                  if (error.status === 404) {
-                    // For this check, 404 might be okay (no data folder yet)
-                    return null;
-                  }
-                  
-                  if (attempt < maxRetries) {
-                    const delay = delays[attempt - 1] || 5000;
-                    console.log(`Retrying in ${delay}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                  } else {
-                    throw new Error(`All ${maxRetries} attempts failed for ${description}: ${error.message}`);
-                  }
-                }
-              }
-            }
-
             const [owner, repo] = process.env.FORK_REPO.split('/');
 
+            // 0) Check and close the data generation issue if still open
+            const { data: dataIssues } = await github.rest.issues.listForRepo({
+              owner, repo,
+              state: 'open',
+              per_page: 100
+            });
+
+            const dataGenIssue = dataIssues.find(i => 
+              i.title === 'Generate and add research data'
+            );
+
+            if (dataGenIssue) {
+              // Auto-close the data generation issue
+              await github.rest.issues.update({
+                owner, repo,
+                issue_number: dataGenIssue.number,
+                state: 'closed'
+              });
+              
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: dataGenIssue.number,
+                body: '✅ This issue has been automatically closed as Milestone 9 is being completed.'
+              });
+              
+              console.log(`Automatically closed data generation issue #${dataGenIssue.number}`);
+            }
+
+            // 1) Check for 2 commit authors (excluding upstream contributors)
+            
+            // Get upstream contributors to exclude
+            let upstreamLogins = [];
             try {
-              // 0) Check and close the data generation issue if still open
-              const { data: dataIssues } = await retryApiCall(async () => {
-                return await github.rest.issues.listForRepo({
-                  owner, repo,
-                  state: 'open',
-                  per_page: 100
-                });
-              }, 'List open issues in fork');
-
-              const dataGenIssue = dataIssues.find(i => 
-                i.title === 'Generate and add research data'
-              );
-
-              if (dataGenIssue) {
-                // Auto-close the data generation issue
-                await retryApiCall(async () => {
-                  return await github.rest.issues.update({
-                    owner, repo,
-                    issue_number: dataGenIssue.number,
-                    state: 'closed'
-                  });
-                }, 'Close data generation issue');
-                
-                await retryApiCall(async () => {
-                  return await github.rest.issues.createComment({
-                    owner, repo,
-                    issue_number: dataGenIssue.number,
-                    body: '✓ This issue has been automatically closed as Milestone 9 is being completed.'
-                  });
-                }, 'Post close comment on data issue');
-                
-                console.log(`Automatically closed data generation issue #${dataGenIssue.number}`);
-              }
-
-              // 1) Check for 2 commit authors (excluding upstream contributors)
+              const { data: upstreamContributors } = await github.rest.repos.listContributors({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100
+              });
+              upstreamLogins = upstreamContributors.map(c => c.login.toLowerCase());
+            } catch (error) {
+              console.log('Could not fetch upstream contributors:', error.message);
+              // Continue with empty array as fallback
+            }
+            
+            // Skip check if comment was made by an upstream contributor
+            const isUpstreamContributor = upstreamLogins.includes(context.actor.toLowerCase());
+            
+            if (!isUpstreamContributor) {
+              // Use Commits API instead of Contributors API (much less caching!)
+              let validCommitAuthors = [];
               
-              // Get upstream contributors to exclude
-              let upstreamLogins = [];
               try {
-                const { data: upstreamContributors } = await retryApiCall(async () => {
-                  return await github.rest.repos.listContributors({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    per_page: 100
-                  });
-                }, 'Get upstream contributors');
-                upstreamLogins = upstreamContributors.map(c => c.login.toLowerCase());
-              } catch (error) {
-                console.log('Could not fetch upstream contributors:', error.message);
-              }
-              
-              // Skip check if comment was made by an upstream contributor
-              const isUpstreamContributor = upstreamLogins.includes(context.actor.toLowerCase());
-              
-              if (!isUpstreamContributor) {
-                // Use Commits API instead of Contributors API
-                let validCommitAuthors = [];
-                
-                const commits = await retryApiCall(async () => {
-                  const { data } = await github.rest.repos.listCommits({
-                    owner, repo,
-                    per_page: 100
-                  });
-                  return data;
-                }, 'List commits in fork');
-                
-                if (commits) {
-                  // Get unique commit authors excluding upstream contributors
-                  const commitAuthors = [...new Set(
-                    commits
-                      .map(c => c.author?.login)
-                      .filter(login => login && !upstreamLogins.includes(login.toLowerCase()))
-                  )];
-                  
-                  validCommitAuthors = commitAuthors;
-                  console.log('Valid commit authors found:', commitAuthors);
-                }
-                
-                if (validCommitAuthors.length < 2) {
-                  await retryApiCall(async () => {
-                    return await github.rest.issues.createComment({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      issue_number: context.issue.number,
-                      body: `⚠️ Milestone 9 not complete. Found ${validCommitAuthors.length} partner(s) with commits: ${validCommitAuthors.join(', ')}. Both partners need to make commits (upload files, edit files, etc.). Then run \`/done 9\` again.`
-                    });
-                  }, 'Post partner check failure');
-                  return;
-                }
-                
-                console.log(`✓ Found ${validCommitAuthors.length} valid commit authors:`, validCommitAuthors);
-              }
-              
-              // 2) Check for Data folder with files
-              let dataFiles = [];
-              
-              // Try 'data' folder first
-              const dataContents = await retryApiCall(async () => {
-                const { data: contents } = await github.rest.repos.getContent({
+                const { data: commits } = await github.rest.repos.listCommits({
                   owner, repo,
-                  path: 'data'
+                  per_page: 100  // Check last 100 commits
                 });
-                return contents;
-              }, 'Check data folder');
+                
+                // Get unique commit authors excluding upstream contributors
+                const commitAuthors = [...new Set(
+                  commits
+                    .map(c => c.author?.login)
+                    .filter(login => login && !upstreamLogins.includes(login.toLowerCase()))
+                )];
+                
+                validCommitAuthors = commitAuthors;
+                console.log('Valid commit authors found:', commitAuthors);
+                
+              } catch (error) {
+                console.log('Commits API error:', error.message);
+              }
               
-              if (dataContents && Array.isArray(dataContents)) {
-                dataFiles = dataContents.filter(item => 
+              if (validCommitAuthors.length < 2) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: `🚫 Milestone 9 not complete. Found ${validCommitAuthors.length} partner(s) with commits: ${validCommitAuthors.join(', ')}. Both partners need to make commits (upload files, edit files, etc.). Then run \`/done 9\` again.`
+                });
+                return;
+              }
+              
+              console.log(`✅ Found ${validCommitAuthors.length} valid commit authors:`, validCommitAuthors);
+            }
+            
+            // 2) Check for Data folder with files
+            let dataFiles = [];
+            try {
+              const { data: contents } = await github.rest.repos.getContent({
+                owner, repo,
+                path: 'data'
+              });
+              
+              if (Array.isArray(contents)) {
+                dataFiles = contents.filter(item => 
                   item.type === 'file' && 
                   (item.name.endsWith('.csv') || item.name.endsWith('.txt') || item.name.endsWith('.json'))
                 );
               }
-              
-              // If not found, try 'Data' folder
-              if (dataFiles.length === 0) {
-                const DataContents = await retryApiCall(async () => {
-                  const { data: contents } = await github.rest.repos.getContent({
-                    owner, repo,
-                    path: 'Data'
-                  });
-                  return contents;
-                }, 'Check Data folder');
+            } catch (error) {
+              try {
+                const { data: contents } = await github.rest.repos.getContent({
+                  owner, repo,
+                  path: 'Data'
+                });
                 
-                if (DataContents && Array.isArray(DataContents)) {
-                  dataFiles = DataContents.filter(item => 
+                if (Array.isArray(contents)) {
+                  dataFiles = contents.filter(item => 
                     item.type === 'file' && 
                     (item.name.endsWith('.csv') || item.name.endsWith('.txt') || item.name.endsWith('.json'))
                   );
                 }
+              } catch (error2) {
+                // Data folder doesn't exist
               }
-              
-              if (dataFiles.length < 2) {
-                await retryApiCall(async () => {
-                  return await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: context.issue.number,
-                    body: '⚠️ Milestone 9 not complete. Create a "data" folder and upload at least 2 data files from the Shiny app. Then run `/done 9` again.'
-                  });
-                }, 'Post data check failure');
-                return;
-              }
-              
-              // ✓ Milestone 9 successful - now automatically trigger Milestone 10
-              
-              const preregistrationUrl = context.payload.issue.html_url;
-              
-              // Create collaboration issues in the fork
-              const issue1 = await retryApiCall(async () => {
-                return await github.rest.issues.create({
-                  owner, repo,
-                  title: 'Decide on meta-comment',
-                  body: [
-                    '## Decide on meta-comment',
-                    '',
-                    'The quote in the study overview is kind of funny, but should we really keep it?',
-                    '- [ ] Make a decision to keep or remove it',
-                    '- [ ] Justify your decision',
-                  ].join('\n')
-                });
-              }, 'Create issue 1');
-              
-              const issue2 = await retryApiCall(async () => {
-                return await github.rest.issues.create({
-                  owner, repo,
-                  title: 'Update number of participants',
-                  body: [
-                    '## Update number of participants',
-                    '',
-                    'The preregistration currently says we\'ll collect data from five participants. But that number is clearly outdated — look how many we are!',
-                    '- [ ] Count the number of participants in the room',
-                    '- [ ] Update the number in the preregistration',
-                  ].join('\n')
-                });
-              }, 'Create issue 2');
-              
-              const issue3 = await retryApiCall(async () => {
-                return await github.rest.issues.create({
-                  owner, repo,
-                  title: 'Correct materials\' description',
-                  body: [
-                    '## Correct materials\' description',
-                    '',
-                    'Some things have changed since the original study or the original study did not entail sufficient information for an exact replication.',
-                    'These things need to be incorporated:',
-                    '- We are using a different data collection tool',
-                    '- We randomly generated the size of the comparison squares from a uniform distribution',
-                  ].join('\n')
-                });
-              }, 'Create issue 3');
-
-              const issue4 = await retryApiCall(async () => {
-                return await github.rest.issues.create({
-                  owner, repo,
-                  title: 'Clarify procedure',
-                  body: [
-                    '## Clarify procedure',
-                    '',
-                    'The procedure description also needs a refresh:', 
-                    '- We didn\'t use a tachistoscope',
-                    '- We didn\'t categorize stimuli into three difficulty levels', 
-                    '- None of us will ever complete 6,850 (!!) trials', 
-                  ].join('\n')
-                });
-              }, 'Create issue 4');
-
-              const issue5 = await retryApiCall(async () => {
-                return await github.rest.issues.create({
-                  owner, repo,
-                  title: 'Improve data analysis plan',
-                  body: [
-                    '## Improve data analysis plan',
-                    '',
-                    'So far, the preregistration says we\'ll plot the results for each participant and visually inspect the data.', 
-                    'That\'s... certainly *one* way to approach it, but does anyone have a better idea?'
-                  ].join('\n')
-                });
-              }, 'Create issue 5');
-              
-              // Update main issue - mark both 9 and 10 complete
-              const updatedBody = context.payload.issue.body
-                .replace(/^(\s*-\s*\[)\s\](\s*9\..*)$/m, '$1x]$2')
-                + '\n- [x] 10. Collaborate on issues';
-              
-              await retryApiCall(async () => {
-                return await github.rest.issues.update({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: updatedBody,
-                  state: 'open'
-                });
-              }, 'Update issue for milestone 9 and 10');
-              
-              // Combined success comment for both milestones
-              const completionBodyLines = [
-                '**Great job on completing milestone 9** ✅',
-                '',
-                'You\'ve now reached the final task of the workshop: collaboratively revising your preregistration. This is where you bring together everything you\'ve learned.', 
-                'To help you get started, we\'ve created a set of issues that outline specific improvements to make. Use these issues to assign tasks and coordinate your work.', 
-                '',
-                '💡 **One more way to edit files**',
-                'You may have noticed that we have avoided using local software to edit files or interact with Git (spoiler: this will be part of a longer workshop).',
-                'Still, there is something almost as good, an IDE/VS Code in the browser.',
-                'To enable that either:',
-                '* type `.` (literal dot on your keyboard) while you in the code or PR view',
-                '* replace `github.com` with `github.dev` in the URL',
-                `* https://github.dev/${owner}/${repo}/`,
-                '',
-                `<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/web_VS.gif" alt="VS_Web">`,
-                '',
-                '🤝 **How to collaborate**', 
-                'You already explored different collaboration setups in milestone 9. For this task:', 
-                '* If you\'re both working in the same repository, each of you should work in a separate branch within that repository.', 
-                '* If you\'re working in separate forks, the less experienced partner (who owns the main project repository) should also create a new branch in their fork. This allows them to open a PR to suggest changes to the main branch of their own project.',
-                '* In any case, ideally you have a branch for each "separate" issue. That way changes can be reviewed and incorporated on their own.',
-                'Once you\'ve completed a meaningful chunk of work (e.g., one or more related tasks), open a pull request (PR) so your partner can review it.', 
-                '',
-                '📌 **Tips for smooth collaboration**', 
-                '* Write **clear commit messages** so your partner knows what changed (e.g., "refine research question").', 
-                '* Keep your branch or fork up-to-date with the main branch before opening a PR.', 
-                '  - [How to sync your fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/syncing-a-fork)', 
-                '  - [How to sync your branch](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/keeping-your-pull-request-in-sync-with-the-base-branch)', 
-                '* **Smaller PRs** (e.g., with fewer commits) are easier to review, discuss and merge. To create small PRs, you have to create more branches.',
-                '* **More lines** Git compares things *per line*, so making a habit of putting, e.g. each sentence on their own line in markdown, or breaking down code into multiple lines helps create clean PRs.', 
-                '* **Mention your partner** in the PR (@username) or by assigning them as a reviewer.', 
-                '',
-                '⚠️ **What if there\'s a merge conflict?**', 
-                'Merge conflicts happen when both of you change the same part of a file and GitHub doesn\'t know which version to keep.', 
-                'To prevent merge conflicts:', 
-                '* Sync your fork or branch before making changes.', 
-                '* Communicate about who is editing what.', 
-                'If a conflict does happen, GitHub will show you what needs to be resolved, and you\'ll need to choose which parts to keep.', 
-                '[About merge conflicts](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/addressing-merge-conflicts/about-merge-conflicts)', 
-                '', 
-                '**Task**: Revise the preregistration together', 
-                '* Use issues to **assign tasks**.', 
-                `1. [Decide on meta-comment](${issue1.data.html_url})`,
-                `2. [Update number of participants](${issue2.data.html_url})`,
-                `3. [Correct materials\' description](${issue3.data.html_url})`,
-                `4. [Clarify procedure](${issue4.data.html_url})`,
-                `5. [Improve data analysis plan](${issue5.data.html_url})`,
-                '* Work individually in your **own branch or fork**.', 
-                '* **Create PRs** when you\'re ready for feedback.', 
-                '* Use PRs to **discuss and improve** the changes.', 
-                '* **Close issues** once tasks are complete.', 
-                '', 
-                '**Afterwards**: This is the final task of the workshop, so there are no more `/done` commands needed.', 
-                '',
-              ];
-              
-              await retryApiCall(async () => {
-                return await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: completionBodyLines.join('\n')
-                });
-              }, 'Post final success comment');
-            } catch (error) {
-              console.error(`Milestone 9/10 verification failed: ${error.message}`);
-              core.setFailed(`Milestone 9/10 failed: ${error.message}`);
             }
-
-  # Error recovery job
-  error-recovery:
-    if: failure()
-    needs: route
-    runs-on: ubuntu-latest
-    steps:
-      - name: Post failure notification
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GH_PAT_CROSSREPO }}
-          script: |
-            try {
+            
+            if (dataFiles.length < 2) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: [
-                  '⚠️ **Workflow Error**',
-                  '',
-                  'The automation encountered a temporary issue. This can happen due to:',
-                  '- GitHub API rate limits',
-                  '- Network connectivity issues',
-                  '- Temporary GitHub service disruptions',
-                  '',
-                  '**What to do:**',
-                  '1. Wait a few moments',
-                  '2. Try your `/done` command again',
-                  '3. If the problem persists, contact workshop support',
-                  '',
-                  `Error occurred at: ${new Date().toISOString()}`
-                ].join('\n')
+                body: '🚫 Milestone 9 not complete. Create a "data" folder and upload at least 2 data files from the Shiny app. Then run `/done 9` again.'
               });
-            } catch (error) {
-              console.error('Could not post error recovery message:', error);
+              return;
             }
+            
+            // ✅ Milestone 9 successful - now automatically trigger Milestone 10
+            
+            const preregistrationUrl = context.payload.issue.html_url;
+            
+            // Create three collaboration issues in the fork
+            const issue1 = await github.rest.issues.create({
+              owner, repo,
+              title: 'Decide on meta-comment',
+              body: [
+                '## Decide on meta-comment',
+                '',
+                'The quote in the study overview is kind of funny, but should we really keep it?',
+                '- [ ] Make a decision to keep or remove it',
+                '- [ ] Justify your decision',
+              ].join('\n')
+            });
+            
+            const issue2 = await github.rest.issues.create({
+              owner, repo,
+              title: 'Update number of participants',
+              body: [
+                '## Update number of participants',
+                '',
+                'The preregistration currently says we\’ll collect data from five participants. But that number is clearly outdated — look how many we are!',
+                '- [ ] Count the number of participants in the room',
+                '- [ ] Update the number in the preregistration',
+              ].join('\n')
+            });
+            
+            const issue3 = await github.rest.issues.create({
+              owner, repo,
+              title: 'Correct materials\' description',
+              body: [
+                '## Correct materials\' description',
+                '',
+                'Some things have changed since the original study or the original study did not entail sufficient information for an exact replication.',
+                'These things need to be incorporated:',
+                '- We are using a different data collection tool',
+                '- We randomly generated the size of the comparison squares from a uniform distribution',
+              ].join('\n')
+            });
+
+            const issue4 = await github.rest.issues.create({
+              owner, repo,
+              title: 'Clarify procedure',
+              body: [
+                '## Clarify procedure',
+                '',
+                'The procedure description also needs a refresh:', 
+                '- We didn\'t use a tachistoscope',
+                '- We didn\'t categorize stimuli into three difficulty levels', 
+                '- None of us will ever complete 6,850 (!!) trials', 
+              ].join('\n')
+            });
+
+            const issue5 = await github.rest.issues.create({
+              owner, repo,
+              title: 'Improve data analysis plan',
+              body: [
+                '## Improve data analysis plan',
+                '',
+                'So far, the preregistration says we\'ll plot the results for each participant and visually inspect the data.', 
+                'That’s... certainly *one* way to approach it, but does anyone have a better idea?'
+              ].join('\n')
+            });
+            
+            // Update main issue - mark both 9 and 10 complete
+            const updatedBody = context.payload.issue.body
+              .replace(/^(\s*-\s*\[)\s\](\s*9\..*)$/m, '$1x]$2')
+              + '\n- [x] 10. Collaborate on issues';
+            
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: updatedBody,
+              state: 'open'
+            });
+            
+            // Combined success comment for both milestones
+            const completionBodyLines = [
+              '**Great job on completing milestone 9** 🎉',
+              '',
+              'You\'ve now reached the final task of the workshop: collaboratively revising your preregistration. This is where you bring together everything you\'ve learned.', 
+              'To help you get started, we\'ve created a set of issues that outline specific improvements to make. Use these issues to assign tasks and coordinate your work.', 
+              '',
+              '💻 **One more way to edit files**',
+              'You may have noticed that we have avoided using local software to edit files or interact with Git (spoiler: this will be part of a longer workshop).',
+              'Still, there is something almost as good, an IDE/VS Code in the browser.',
+              'To enable that either:',
+              '* type `.` (literal dot on your keyboard) while you in the code or PR view',
+              '* replace `github.com` with `github.dev` in the URL',
+              `* https://github.dev/${owner}/${repo}/`,
+              '',
+              `<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/web_VS.gif" alt="VS_Web">`,
+              '',
+              '👥 **How to collaborate**', 
+              'You already explored different collaboration setups in milestone 9. For this task:', 
+              '* If you\'re both working in the same repository, each of you should work in a separate branch within that repository.', 
+              '* If you\'re working in separate forks, the less experienced partner (who owns the main project repository) should also create a new branch in their fork. This allows them to open a PR to suggest changes to the main branch of their own project.',
+              '* In any case, ideally you have a branch for each "seperate" issue. That way changes can be reviewed and incorporated on their own.',
+              'Once you\'ve completed a meaningful chunk of work (e.g., one or more related tasks), open a pull request (PR) so your partner can review it.', 
+              '',
+              '💡 **Tips for smooth collaboration**', 
+              '* Write **clear commit messages** so your partner knows what changed (e.g., "refine research question").', 
+              '* Keep your branch or fork up-to-date with the main branch before opening a PR.', 
+              '  - [How to sync your fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/syncing-a-fork)', 
+              '  - [How to sync your branch](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/keeping-your-pull-request-in-sync-with-the-base-branch)', 
+              '* **Smaller PRs** (e.g., with fewer commits) are easier to review, discuss and merge. To create small PRs, you have to create more branches.',
+              '* **More lines** Git compares things *per line*, so making a habit of putting, e.g. each sentence on their own line in markdown, or breaking down code into multiple lines helps create clean PRs.', 
+              '* **Mention your partner** in the PR (@username) or by assigning them as a reviewer.', 
+              '',
+              '⚔️ **What if there\'s a merge conflict?**', 
+              'Merge conflicts happen when both of you change the same part of a file and GitHub doesn’t know which version to keep.', 
+              'To prevent merge conflicts:', 
+              '* Sync your fork or branch before making changes.', 
+              '* Communicate about who is editing what.', 
+              'If a conflict does happen, GitHub will show you what needs to be resolved, and you\'ll need to choose which parts to keep.', 
+              '[About merge conflicts](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/addressing-merge-conflicts/about-merge-conflicts)', 
+              '', 
+              '**Task**: Revise the preregistration together', 
+              '* Use issues to **assign tasks**.', 
+              `1. [Decide on meta-comment](${issue1.data.html_url})`,
+              `2. [Update number of participants](${issue2.data.html_url})`,
+              `3. [Correct materials\' description](${issue3.data.html_url})`,
+              `4. [Clarify procedure](${issue4.data.html_url})`,
+              `5. [Improve data analysis plan](${issue5.data.html_url})`,
+              '* Work individually in your **own branch or fork**.', 
+              '* **Create PRs** when you\'re ready for feedback.', 
+              '* Use PRs to **discuss and improve** the changes.', 
+              '* **Close issues** once tasks are complete.', 
+              '', 
+              '**Afterwards**: This is the final task of the workshop, so there are no more `/done` commands needed.', 
+              '',
+            ];
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: completionBodyLines.join('\n')
+            });
