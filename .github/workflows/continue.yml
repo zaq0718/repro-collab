@@ -154,7 +154,7 @@ jobs:
               const milestone3BodyLines = [
                 '🎉 Milestone 3 complete - "Activate issues"!',
                 '',
-                `**Task:** Milestone 4 is now available, and an issue is waiting in your fork, look into it: ${newIssue.data.html_url}`,
+                `**Task:** Milestone 4 - 🟢 Easy is now available, and an issue is waiting in your fork, look into it: ${newIssue.data.html_url}`,
                 '',
                 `**Afterwards:** Comment \`/done 4\` here.`,
                 ];
@@ -292,7 +292,7 @@ jobs:
             const milestone4BodyLines = [
               '🎉 Milestone 4 complete - "Open a issue"!',
               '',
-              `**Task:** Milestone 5 is now available, go back to the issue you just solved, read the new comment, and close the issue: ${firstIssueUrl}`,
+              `**Task:** Milestone 5 - 🟢 Easy is now available, go back to the issue you just solved, read the new comment, and close the issue: ${firstIssueUrl}`,
               '',
               'Click the "Close issue" button.',
               '',
@@ -541,7 +541,7 @@ jobs:
             const milestone5BodyLines = [
               '🎉 Milestone 5 complete - "Close an issue"!',
               '',
-              `**Task:** Milestone 6 is now available. Review the pull request (PR) I created in your fork: ${pr.html_url}`,
+              `**Task:** Milestone 6 - 🟡 Medium is now available. Review the pull request (PR) I created in your fork: ${pr.html_url}`,
               '',
               'Add a suggestion to improve the code using GitHub\'s suggestion feature, more detail in our PR.',
               '',
@@ -645,7 +645,7 @@ jobs:
             const milestone6BodyLines = [
               '🎉 Milestone 6 complete - "Add a PR suggestion"!',
               '',
-              `**Task:** Milestone 7 is now available. Time to merge your pull request: ${pr.html_url}`,
+              `**Task:** Milestone 7 - 🟡 Medium is now available. Time to merge your pull request: ${pr.html_url}`,
               '',
               'Click the "Merge pull request" button to complete the PR workflow.',
               '',
@@ -801,7 +801,7 @@ jobs:
             const milestone8BodyLines = [
               '🎉 Great that you found your partner!',
               '',
-              '**Milestone 9 is now available: Generate data together**',
+              '**Milestone 9 - 🔴 Hard is now available: Generate data together**',
               '',
               'In this milestone, you will:',
               '1. Use a Shiny app to gather data',
