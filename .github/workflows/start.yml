@@ -74,7 +74,27 @@ jobs:
               labels: ['newfork']
             });
 
-            // 3) Post the detailed "Next step" instructions as a comment
+            // 3) Unsubscribe the token owner (bot/workflow user) from the issue notifications using REST API
+            try {
+              // Use REST API to unsubscribe from the issue
+              await github.rest.activity.deleteThreadSubscription({
+                thread_id: issue.data.id
+              });
+              
+              console.log(`Successfully unsubscribed token owner from issue #${issue.data.number}`);
+              
+            } catch (error) {
+              // Check if it's a 304 (not modified) which means already unsubscribed
+              if (error.status === 304) {
+                console.log(`Token owner was already unsubscribed from issue #${issue.data.number}`);
+              } else {
+                console.log(`Note: Could not unsubscribe token owner from notifications.`);
+                console.log(`Error: ${error.message}`);
+              }
+              // Continue execution even if unsubscribe fails
+            }
+
+            // 4) Post the detailed "Next step" instructions as a comment
 
             
             const commentBody = `

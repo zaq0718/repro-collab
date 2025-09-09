@@ -1,0 +1,157 @@
+name: Close All Newfork Issues
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (only list issues without closing them)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      add_comment:
+        description: 'Add a closing comment to each issue'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      comment_text:
+        description: 'Custom closing comment (optional)'
+        required: false
+        default: 'This workshop tracking issue is being closed as part of a batch cleanup. Thank you for participating! 🎉'
+        type: string
+
+jobs:
+  close-newfork-issues:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Close all issues with newfork label
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const DRY_RUN = ${{ inputs.dry_run }} === true;
+            const ADD_COMMENT = ${{ inputs.add_comment }} === true;
+            const COMMENT_TEXT = `${{ inputs.comment_text }}`;
+            
+            console.log(`Starting ${DRY_RUN ? 'DRY RUN' : 'LIVE RUN'} to close newfork issues`);
+            console.log(`Add comment: ${ADD_COMMENT}`);
+            if (ADD_COMMENT) {
+              console.log(`Comment text: ${COMMENT_TEXT}`);
+            }
+            console.log('---');
+            
+            let page = 1;
+            let hasMore = true;
+            let totalIssues = 0;
+            let closedCount = 0;
+            const issuesToClose = [];
+            
+            // Fetch all open issues with the 'newfork' label
+            while (hasMore) {
+              try {
+                const response = await github.rest.issues.listForRepo({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  labels: 'newfork',
+                  state: 'open',
+                  per_page: 100,
+                  page: page
+                });
+                
+                if (response.data.length === 0) {
+                  hasMore = false;
+                } else {
+                  issuesToClose.push(...response.data);
+                  page++;
+                }
+                
+                // GitHub API rate limiting protection
+                if (page > 10) {
+                  console.log('Reached page limit (1000 issues). Run workflow again if more issues remain.');
+                  hasMore = false;
+                }
+              } catch (error) {
+                console.error(`Error fetching issues on page ${page}: ${error.message}`);
+                hasMore = false;
+              }
+            }
+            
+            totalIssues = issuesToClose.length;
+            console.log(`Found ${totalIssues} open issue(s) with 'newfork' label\n`);
+            
+            if (totalIssues === 0) {
+              console.log('No issues to close. Exiting.');
+              return;
+            }
+            
+            // Process each issue
+            for (const issue of issuesToClose) {
+              const issueNumber = issue.number;
+              const issueTitle = issue.title;
+              const issueUrl = issue.html_url;
+              
+              console.log(`Processing Issue #${issueNumber}: "${issueTitle}"`);
+              console.log(`  URL: ${issueUrl}`);
+              
+              if (DRY_RUN) {
+                console.log(`  [DRY RUN] Would close this issue`);
+                if (ADD_COMMENT) {
+                  console.log(`  [DRY RUN] Would add comment: "${COMMENT_TEXT}"`);
+                }
+              } else {
+                try {
+                  // Add comment if requested
+                  if (ADD_COMMENT) {
+                    await github.rest.issues.createComment({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: issueNumber,
+                      body: COMMENT_TEXT
+                    });
+                    console.log(`  ✓ Added closing comment`);
+                  }
+                  
+                  // Close the issue
+                  await github.rest.issues.update({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issueNumber,
+                    state: 'closed'
+                  });
+                  
+                  closedCount++;
+                  console.log(`  ✓ Closed successfully`);
+                  
+                  // Small delay to avoid rate limiting
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                  
+                } catch (error) {
+                  console.error(`  ✗ Error closing issue #${issueNumber}: ${error.message}`);
+                }
+              }
+              
+              console.log('');
+            }
+            
+            // Summary
+            console.log('='.repeat(50));
+            if (DRY_RUN) {
+              console.log(`DRY RUN SUMMARY: Would close ${totalIssues} issue(s)`);
+            } else {
+              console.log(`SUMMARY: Successfully closed ${closedCount} out of ${totalIssues} issue(s)`);
+              if (closedCount < totalIssues) {
+                console.log(`WARNING: ${totalIssues - closedCount} issue(s) could not be closed. Check logs above for details.`);
+              }
+            }
+            
+            // Set output for potential use in other steps
+            core.setOutput('total_issues', totalIssues);
+            core.setOutput('closed_count', closedCount);
+            core.setOutput('dry_run', DRY_RUN);
