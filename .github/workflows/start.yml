@@ -74,15 +74,17 @@ jobs:
               labels: ['newfork']
             });
 
+            // 3) Unsubscribe the token owner (bot/workflow user) from the issue notifications using GraphQL
             try {
               // Get the issue's node ID for GraphQL (we already have it from the create response)
               const issueNodeId = issue.data.node_id;
               
               // Unsubscribe the current authenticated user (token owner) from the issue using GraphQL
               const mutation = `
-                mutation($subscribableId: ID!) {
-                  unsubscribeFromSubscribable(input: {
-                    subscribableId: $subscribableId
+                mutation($subscribableId: ID!, $state: SubscriptionState!) {
+                  updateSubscription(input: {
+                    subscribableId: $subscribableId,
+                    state: $state
                   }) {
                     subscribable {
                       viewerSubscription
@@ -92,7 +94,8 @@ jobs:
               `;
               
               const result = await github.graphql(mutation, {
-                subscribableId: issueNodeId
+                subscribableId: issueNodeId,
+                state: 'UNSUBSCRIBED'
               });
               
               console.log(`Successfully unsubscribed token owner from issue #${issue.data.number}`);
