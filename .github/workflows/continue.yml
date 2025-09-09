@@ -782,6 +782,8 @@ jobs:
                 '### Step 1: Generate Data',
                 `Visit [experiment](https://${context.repo.owner}.github.io/${context.repo.repo}/steven) → Generate 20+ trials together`,
                 '',
+                '**Note:** Sometimes the program may take a bit longer to load. This is normal—just wait patiently until it has fully loaded.',
+                '',
                 '### Step 2: Upload to less experienced partner\'s fork',
                 '**Note:** GitHub cannot create empty folders - you must upload files to create the folder',
                 '',
