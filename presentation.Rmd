@@ -375,6 +375,19 @@ class: center, middle
 # Alternatives are hard
 
 ---
+## What's the first step of every epic collaboration?
+Find a collaborator!
+
+* Form a line by GitHub experience
+  - Left end = novice (never touched GitHub)
+  - Right end = expert (merge conflicts don’t scare me)
+* Now split the line in half
+  - First half moves left, second half stays
+  - Voilà: pairs!
+
+
+---
+
 class: center, middle
 
 # Learning Goals
