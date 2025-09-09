@@ -9,25 +9,48 @@ async function createComment(params) {
   // Create the comment using the standard API
   const comment = await github.rest.issues.createComment(params);
   
-  // Get the issue details for thread_id
-  const issue = await github.rest.issues.get({
-    owner: params.owner,
-    repo: params.repo,
-    issue_number: params.issue_number
-  });
-  
-  // Unsubscribe immediately after commenting
+  // Get the issue node ID and unsubscribe using GraphQL
   try {
-    await github.rest.activity.deleteThreadSubscription({
-      thread_id: issue.data.id
+    const issueQuery = `
+      query($owner: String!, $repo: String!, $number: Int!) {
+        repository(owner: $owner, name: $repo) {
+          issue(number: $number) {
+            id
+          }
+        }
+      }
+    `;
+    
+    const issueResult = await github.graphql(issueQuery, {
+      owner: params.owner,
+      repo: params.repo,
+      number: params.issue_number
     });
+    
+    const issueNodeId = issueResult.repository.issue.id;
+    
+    // Unsubscribe using GraphQL
+    const mutation = `
+      mutation($subscribableId: ID!, $state: SubscriptionState!) {
+        updateSubscription(input: {
+          subscribableId: $subscribableId,
+          state: $state
+        }) {
+          subscribable {
+            viewerSubscription
+          }
+        }
+      }
+    `;
+    
+    const result = await github.graphql(mutation, {
+      subscribableId: issueNodeId,
+      state: 'UNSUBSCRIBED'
+    });
+    
     console.log(`Comment posted and unsubscribed from issue #${params.issue_number}`);
   } catch (error) {
-    if (error.status === 304) {
-      console.log(`Comment posted, already unsubscribed from issue #${params.issue_number}`);
-    } else {
-      console.log(`Comment posted but could not unsubscribe: ${error.message}`);
-    }
+    console.log(`Comment posted but could not unsubscribe: ${error.message}`);
   }
   
   return comment;
@@ -42,16 +65,31 @@ async function createIssue(params) {
   // Create the issue using the standard API
   const issue = await github.rest.issues.create(params);
   
-  // Unsubscribe immediately after creation
+  // Unsubscribe using GraphQL (we already have node_id from creation)
   try {
-    await github.rest.activity.deleteThreadSubscription({
-      thread_id: issue.data.id
+    const issueNodeId = issue.data.node_id;
+    
+    const mutation = `
+      mutation($subscribableId: ID!, $state: SubscriptionState!) {
+        updateSubscription(input: {
+          subscribableId: $subscribableId,
+          state: $state
+        }) {
+          subscribable {
+            viewerSubscription
+          }
+        }
+      }
+    `;
+    
+    const result = await github.graphql(mutation, {
+      subscribableId: issueNodeId,
+      state: 'UNSUBSCRIBED'
     });
+    
     console.log(`Issue #${issue.data.number} created and unsubscribed`);
   } catch (error) {
-    if (error.status !== 304) {
-      console.log(`Issue created but could not unsubscribe: ${error.message}`);
-    }
+    console.log(`Issue created but could not unsubscribe: ${error.message}`);
   }
   
   return issue;
