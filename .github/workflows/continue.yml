@@ -714,8 +714,9 @@ jobs:
               '- ✅ Handling issues',
               '- ✅ Reviewing & merging PRs',
               '',
-              'Now you need a partner. The goal of the next task is to find a partner with a different experience level.',
-              '',
+              'Now we can start with the collaborative part of the workshop!',
+              'However, your partner may still be catching up on their milestones — everyone moves at a different pace.',
+              'In the meantime, use this opportunity to connect with other participants (maybe even some future collaborators).'
               '---',
               '',
               '**Task**: Stand up and move to the marked corner.',
@@ -727,10 +728,8 @@ jobs:
               '    * Imagine you want to give feedback to your student, collaborator, etc. how do usually provide it? How could you use GitHub?',
               '    * What can you use PRs for?',
               '    * What aspects of your workflow are difficult to translate to GitHub?',
-              '3. ➡️ When you are done with the discussion, move down to the other end of the line and chose a partner',
+              '3. ➡️ When you are done with the discussion, move down to the other end of the line and join the discussion there.',
               '4. ➡️ Participate in their discussion till the time is up.',
-              '',
-              `<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/pair-finding.svg" alt="Visual explanation of the partner finding exercise.">`,
               '',
               `**Afterwards**: comment \`/done 8\` here.`
               ];
@@ -803,7 +802,7 @@ jobs:
             
             // Success comment with link to the data generation issue
             const milestone8BodyLines = [
-              '🎉 Great that you found your partner!',
+              '🎉 Great that you now can start working with your partner!',
               '',
               '**Milestone 9 - 🔴 Hard is now available: Generate data together**',
               '',
