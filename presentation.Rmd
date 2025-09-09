@@ -428,9 +428,6 @@ template: github
 
 ]
 
---
-
-After `3.` you are asked to go to a "marked corner" which is...
 
 ---
 
