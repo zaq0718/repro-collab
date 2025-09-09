@@ -693,7 +693,7 @@ jobs:
             // Cross off “7.”, reveal “8.”
             const updatedBody7 = context.payload.issue.body
               .replace(/^(\s*-\s*\[)\s\](\s*7\..*)$/m, '$1x]$2')
-              + '\n- [ ] 8. Find your group - 🟢 Easy';
+              + '\n- [ ] 8. Discuss Github's functionality  - 🟢 Easy';
             
             await github.rest.issues.update({
               owner: context.repo.owner,
