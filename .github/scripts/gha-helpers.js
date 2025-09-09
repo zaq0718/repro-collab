@@ -76,7 +76,16 @@ async function createIssue(github, context, title, body, labels = []) {
 }
 
 // Export functions for use in workflows
-module.exports = {
+// When using eval(), we'll capture these directly
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    createComment,
+    createIssue
+  };
+}
+
+// For eval() usage, make functions available globally
+const githubHelpers = {
   createComment,
   createIssue
 };
