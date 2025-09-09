@@ -74,7 +74,36 @@ jobs:
               labels: ['newfork']
             });
 
-            // 3) Post the detailed "Next step" instructions as a comment
+            try {
+              // Get the issue's node ID for GraphQL (we already have it from the create response)
+              const issueNodeId = issue.data.node_id;
+              
+              // Unsubscribe the current authenticated user (token owner) from the issue using GraphQL
+              const mutation = `
+                mutation($subscribableId: ID!) {
+                  unsubscribeFromSubscribable(input: {
+                    subscribableId: $subscribableId
+                  }) {
+                    subscribable {
+                      viewerSubscription
+                    }
+                  }
+                }
+              `;
+              
+              const result = await github.graphql(mutation, {
+                subscribableId: issueNodeId
+              });
+              
+              console.log(`Successfully unsubscribed token owner from issue #${issue.data.number}`);
+              
+            } catch (error) {
+              console.log(`Note: Could not unsubscribe token owner from notifications.`);
+              console.log(`Error: ${error.message}`);
+              // Continue execution even if unsubscribe fails
+            }
+
+            // 4) Post the detailed "Next step" instructions as a comment
 
             
             const commentBody = `
