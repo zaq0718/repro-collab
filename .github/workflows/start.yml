@@ -74,35 +74,23 @@ jobs:
               labels: ['newfork']
             });
 
-            // 3) Unsubscribe the token owner (bot/workflow user) from the issue notifications using GraphQL
+            // 3) Unsubscribe the token owner (bot/workflow user) from the issue notifications using REST API
             try {
-              // Get the issue's node ID for GraphQL (we already have it from the create response)
-              const issueNodeId = issue.data.node_id;
-              
-              // Unsubscribe the current authenticated user (token owner) from the issue using GraphQL
-              const mutation = `
-                mutation($subscribableId: ID!, $state: SubscriptionState!) {
-                  updateSubscription(input: {
-                    subscribableId: $subscribableId,
-                    state: $state
-                  }) {
-                    subscribable {
-                      viewerSubscription
-                    }
-                  }
-                }
-              `;
-              
-              const result = await github.graphql(mutation, {
-                subscribableId: issueNodeId,
-                state: 'UNSUBSCRIBED'
+              // Use REST API to unsubscribe from the issue
+              await github.rest.activity.deleteThreadSubscription({
+                thread_id: issue.data.id
               });
               
               console.log(`Successfully unsubscribed token owner from issue #${issue.data.number}`);
               
             } catch (error) {
-              console.log(`Note: Could not unsubscribe token owner from notifications.`);
-              console.log(`Error: ${error.message}`);
+              // Check if it's a 304 (not modified) which means already unsubscribed
+              if (error.status === 304) {
+                console.log(`Token owner was already unsubscribed from issue #${issue.data.number}`);
+              } else {
+                console.log(`Note: Could not unsubscribe token owner from notifications.`);
+                console.log(`Error: ${error.message}`);
+              }
               // Continue execution even if unsubscribe fails
             }
 
