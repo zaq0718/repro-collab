@@ -68,28 +68,53 @@ async function createIssue(params) {
   // Unsubscribe using GraphQL (we already have node_id from creation)
   try {
     const issueNodeId = issue.data.node_id;
+    console.log(`Created issue #${issue.data.number} with node ID: ${issueNodeId}`);
     
-    const mutation = `
-      mutation($subscribableId: ID!, $state: SubscriptionState!) {
-        updateSubscription(input: {
-          subscribableId: $subscribableId,
-          state: $state
-        }) {
-          subscribable {
+    // First check the subscription status
+    const checkQuery = `
+      query($id: ID!) {
+        node(id: $id) {
+          ... on Issue {
             viewerSubscription
           }
         }
       }
     `;
     
-    const result = await github.graphql(mutation, {
-      subscribableId: issueNodeId,
-      state: 'UNSUBSCRIBED'
+    const checkResult = await github.graphql(checkQuery, {
+      id: issueNodeId
     });
     
-    console.log(`Issue #${issue.data.number} created and unsubscribed`);
+    console.log(`Current subscription state: ${checkResult.node.viewerSubscription}`);
+    
+    if (checkResult.node.viewerSubscription === 'SUBSCRIBED') {
+      const mutation = `
+        mutation($subscribableId: ID!, $state: SubscriptionState!) {
+          updateSubscription(input: {
+            subscribableId: $subscribableId,
+            state: $state
+          }) {
+            subscribable {
+              viewerSubscription
+            }
+          }
+        }
+      `;
+      
+      const result = await github.graphql(mutation, {
+        subscribableId: issueNodeId,
+        state: 'UNSUBSCRIBED'
+      });
+      
+      console.log(`Issue #${issue.data.number} created and unsubscribed, new state: ${result.updateSubscription.subscribable.viewerSubscription}`);
+    } else {
+      console.log(`Issue #${issue.data.number} created, already ${checkResult.node.viewerSubscription}`);
+    }
   } catch (error) {
     console.log(`Issue created but could not unsubscribe: ${error.message}`);
+    if (error.errors) {
+      console.log(`GraphQL errors:`, JSON.stringify(error.errors, null, 2));
+    }
   }
   
   return issue;
