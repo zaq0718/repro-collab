@@ -55,7 +55,7 @@ jobs:
             *Why?* This is due to the technical setup of the workshop. You’re working in your fork, but the issue that tracks your progress is in the original repository. 
             Since you don’t have write access there, you cannot edit the issue directly (for example, by checking checkboxes). We'll provide links along the way that lead to the correct places to make your life easier. 
 
-
+            - [x] 1. Find a partner - 🟢 Easy
             - [x] 1. Created GitHub account - 🟢 Easy
             - [x] 2. Fork GitHub repo - 🟢 Easy
             - [ ] 3. Activate issues in your fork - 🟢 Easy
