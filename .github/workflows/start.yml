@@ -13,13 +13,16 @@ jobs:
         with:
           github-token: ${{ secrets.GH_PAT_CROSSREPO }}
           script: |
-            const { data } = await github.rest.repos.getContent({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+            const helpers = await (async () => {
+              let githubHelpers;
+              const { data } = await github.rest.repos.getContent({
+                owner: context.repo.owner,
+               repo: context.repo.repo,
               path: '.github/scripts/github-helpers.js'
-            });
-            eval(Buffer.from(data.content, 'base64').toString());
-            const helpers = githubHelpers;
+              });
+              eval(Buffer.from(data.content, 'base64').toString());
+             return githubHelpers;
+            })();
 
             const FORKER    = context.actor;
             const UPSTREAM  = context.repo.owner + '/' + context.repo.repo;
