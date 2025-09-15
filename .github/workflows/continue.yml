@@ -699,7 +699,7 @@ jobs:
             // Cross off “7.”, reveal “8.”
             const updatedBody7 = context.payload.issue.body
               .replace(/^(\s*-\s*\[)\s\](\s*7\..*)$/m, '$1x]$2')
-              + '\n- [ ] 8. Find your group - 🟢 Easy';
+              + '\n- [ ] 8. Discuss Github's functionality  - 🟢 Easy';
             
             await github.rest.issues.update({
               owner: context.repo.owner,
@@ -720,23 +720,17 @@ jobs:
               '- ✅ Handling issues',
               '- ✅ Reviewing & merging PRs',
               '',
-              'Now you need a partner. The goal of the next task is to find a partner with a different experience level.',
-              '',
-              '---',
-              '',
-              '**Task**: Stand up and move to the marked corner.',
-              '',
-              '1. ➡️ Form a line.',
-              '2. ➡️ Discuss with your neighbor the following questions:',
+              'Now we can start with the collaborative part of the workshop!',  
+              'Before you dive into editing text together, take a moment to discuss some things first.',  
+              '',  
+              'If your partner needs a bit more time to catch up on their milestones — everyone moves at a different pace — you can already start discussing with others around you who are ready. (Eavesdropping is also allowed!)',  
+              '',  
+              '**Task**: Discuss with your partner (or the people around you) the following questions:',  
               '    * What makes an ideal issue?',
               '    * How can issues be used to organize tasks and responsibilities?',
               '    * Imagine you want to give feedback to your student, collaborator, etc. how do usually provide it? How could you use GitHub?',
               '    * What can you use PRs for?',
               '    * What aspects of your workflow are difficult to translate to GitHub?',
-              '3. ➡️ When you are done with the discussion, move down to the other end of the line and chose a partner',
-              '4. ➡️ Participate in their discussion till the time is up.',
-              '',
-              `<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/pair-finding.svg" alt="Visual explanation of the partner finding exercise.">`,
               '',
               `**Afterwards**: comment \`/done 8\` here.`
               ];

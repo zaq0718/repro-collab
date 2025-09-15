@@ -65,7 +65,7 @@ jobs:
             *Why?* This is due to the technical setup of the workshop. You’re working in your fork, but the issue that tracks your progress is in the original repository. 
             Since you don’t have write access there, you cannot edit the issue directly (for example, by checking checkboxes). We'll provide links along the way that lead to the correct places to make your life easier. 
 
-
+            - [x] 0. Find a partner - 🟢 Easy
             - [x] 1. Created GitHub account - 🟢 Easy
             - [x] 2. Fork GitHub repo - 🟢 Easy
             - [ ] 3. Activate issues in your fork - 🟢 Easy
@@ -109,6 +109,8 @@ jobs:
             
             const commentBody = `
             ---
+            In any collaboration, some tasks need to be done on your own (e.g., to get some focused work done), which is why you’ll work alone in the first milestones. 
+            Of course, you can always ask your partner or us if something is unclear! 
             
             Let’s approach this like a true scientist: step by step, with curiosity, precision, and a healthy dose of skepticism (and maybe a coffee or two). 
             If you hit an unexpected result, remember—every great discovery started with a question. 
