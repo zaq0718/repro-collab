@@ -735,7 +735,11 @@ jobs:
               ' * What can you use PRs for?',
               ' * What aspects of your workflow are difficult to translate to GitHub?',
               '',
-              `**Afterwards**: comment \`/done 8\` here.`
+              '**Plenum discussion**',
+              '',
+              'We will reconvene in the plenum to discuss these issues.',
+              '',
+              `**After the plenum discussion**: comment \`/done 8\` here.`
               ];
 
             await github.rest.issues.createComment({
