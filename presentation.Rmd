@@ -85,13 +85,85 @@ class: center, middle
 ## Why collaboration?
 
 ```{r journal-funs, echo=FALSE, cache=TRUE}
-nauthor <- function(issn, limit = 100){
-  raw <- rcrossref::cr_journals_(issn = issn, works = TRUE, sort = "published", limit = limit, select = "author")
-  vapply(jsonlite::parse_json(raw)$message$items, \(x)length(x$author), 1)
+nauthor <- function(issn, limit = 100, max_retries = 3) {
+  # Function to safely call the API with retries
+  safe_api_call <- function() {
+    for (attempt in 1:max_retries) {
+      tryCatch({
+        raw <- rcrossref::cr_journals_(
+          issn = issn, 
+          works = TRUE, 
+          sort = "published", 
+          limit = limit, 
+          select = "author"
+        )
+        
+        # Try to parse JSON - this will fail if raw is NA, NULL, or invalid JSON
+        parsed <- tryCatch({
+          jsonlite::parse_json(raw)
+        }, error = function(parse_error) {
+          stop(sprintf("Failed to parse JSON response: %s", parse_error$message))
+        })
+        
+        # Check if we have valid data structure
+        if (!is.null(parsed$message$items)) {
+          return(parsed)  # SUCCESS - exit the function immediately
+        } else {
+          stop("No items in response")
+        }
+        
+      }, error = function(e) {
+        if (attempt < max_retries) {
+          message(sprintf("Attempt %d failed for ISSN %s: %s. Retrying...", 
+                         attempt, issn, e$message))
+          Sys.sleep(2)  # Wait 2 seconds before retry
+          # Continue to next iteration
+        } else {
+          stop(sprintf("Failed after %d attempts for ISSN %s: %s", 
+                      max_retries, issn, e$message))
+        }
+      })
+    }
+  }
+  
+  # Get the parsed data
+  parsed_data <- safe_api_call()
+  
+  # Extract author counts with error handling
+  author_counts <- vapply(
+    parsed_data$message$items, 
+    function(x) {
+      if (is.null(x$author)) {
+        return(1L)  # Default to 1 if no author info
+      } else {
+        return(as.integer(length(x$author)))
+      }
+    }, 
+    integer(1)
+  )
+  
+  return(author_counts)
 }
 
-table_author <- function(x){
-  raw <- table(cut(x, breaks = c(1:10, 1000), label = c(1:9, "10+"), right = FALSE))
+table_author <- function(x) {
+  # Handle edge cases
+  if (length(x) == 0) {
+    return(matrix(0, nrow = 1, ncol = 10, 
+                  dimnames = list(NULL, c(1:9, "10+"))))
+  }
+  
+  # Ensure x contains valid numeric values
+  x <- x[!is.na(x) & x > 0]
+  
+  if (length(x) == 0) {
+    return(matrix(0, nrow = 1, ncol = 10, 
+                  dimnames = list(NULL, c(1:9, "10+"))))
+  }
+  
+  raw <- table(cut(x, 
+                   breaks = c(1:10, 1000), 
+                   labels = c(1:9, "10+"), 
+                   right = FALSE))
   t(as.matrix(raw, col.names = names(t)))
 }
 ```
@@ -375,6 +447,20 @@ class: center, middle
 # Alternatives are hard
 
 ---
+## What's the first step of every epic collaboration?
+Find a collaborator!
+
+* Form a line by GitHub experience
+  - Left end = novice (never touched GitHub)
+  - Right end = expert (merge conflicts don’t scare me)
+* Now split the line in half
+  - First half moves left, second half stays
+  - Voilà: pairs!
+
+If you realize you don’t want to participate in the workshop, please step out now as otherwise your partner will be left hanging.
+
+---
+
 class: center, middle
 
 # Learning Goals
@@ -414,9 +500,6 @@ template: github
 
 ]
 
---
-
-After `3.` you are asked to go to a "marked corner" which is...
 
 ---
 
