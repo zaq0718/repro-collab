@@ -491,35 +491,36 @@ jobs:
               '### Congratulations on completing milestone 5!',
               '',
               'Next, we\'ll have a look at the draft of the preregistration that your (imaginary) collaborators have prepared.',
-              'But before doing so, let\'s learn how this situation came about.', 
-              '', 
+              'But before doing so, let\'s learn how this situation came about.',
+              '',
               'To do so, we need to introduce **branches**. Branches allow collaborators to work independently yet simultaneously on the same project.',
               'How? Each branch is a parallel version of the project where changes can be made without affecting the official version of the project.',
-              'The **main branch** usually represents the official version of the project, i.e., the one that reflects the current consensus.', 
+              'The **main branch** usually represents the official version of the project, i.e., the one that reflects the current consensus.',
               'For example, each collaborator might use their own branch to draft sections of a paper, experiment with changes, or revise text without disrupting others\' work.',
-              '', 
-              'Once work in a branch is ready, your collaborators (or you) can create a **pull request (PR)**, which is the main tool for requesting feedback on GitHub.', 
-              'A pull request shows the changes made in a branch line-by-line and invites collaborators to review, discuss, and suggest improvements.', 
-              'When the changes are deemed good, they can be added to the official version.', 
+              '',
+              'Once work in a branch is ready, your collaborators (or you) can create a **pull request (PR)**, which is the main tool for requesting feedback on GitHub.',
+              'A pull request shows the changes made in a branch line-by-line and invites collaborators to review, discuss, and suggest improvements.',
+              'When the changes are deemed good, they can be added to the official version.',
               'This step is called **merging**: it combines the separate branch with the main branch so that both contain the same version of the project.',
-              '', 
-              'You\’re now inside such a pull request: Your collaborators are waiting for your feedback on their preregistration draft.',
+              '',
+              'You\'re now inside such a pull request: Your collaborators are waiting for your feedback on their preregistration draft.',
               `This PR closes #${preregIssue.number} (${preregIssue.title}).`,
-              '', 
-              **Task:** Suggest a change to the preregistration file
-              - Go to the **Files changed** tab of this PR.
-              - Find the typo in line 12 ("empierically").
-              - Click the "+" button next to the line to start a comment.
-              - **Important:** Click **"Start a review"** (not "Add single comment") so your suggestion is part of a review.
-              - Write your correction as a ```suggestion and submit the review.
-
-              **How it looks:**
-              ![Start a review](URL_TO_IMAGE_1 "Start a review")
-              ![Add suggestion](URL_TO_IMAGE_2 "Add suggestion")
-
-              **Afterwards:** Once you've suggested your change, return to ${context.payload.issue.html_url} and comment `/done 6` to continue
-
-              <img src="https://raw.githubusercontent.com/aaronpeikert/repro-collab/main/assets/make_suggestion.gif" alt="Make Suggestion GIF">
+              '',
+              '**Task:** Suggest a change to the preregistration file',
+              '- Go to the **Files changed** tab of this PR.',
+              '- Find the typo in line 12 ("empierically").',
+              '- Click the "+" button next to the line to start a comment.',
+              '- **Important:** Click **"Start a review"** (not "Add single comment") so your suggestion is part of a review.',
+              '- Write your correction as a ```suggestion and submit the review.',
+              '',
+              '**How it looks:**',
+              '![Start a review](URL_TO_IMAGE_1 "Start a review")',
+              '![Add suggestion](URL_TO_IMAGE_2 "Add suggestion")',
+              '',
+              `**Afterwards:** Once you've suggested your change, return to ${context.payload.issue.html_url} and comment /done 6 to continue`,
+              '',
+              '<img src="https://raw.githubusercontent.com/aaronpeikert/repro-collab/main/assets/make_suggestion.gif" alt="Make Suggestion GIF">'
+            ];
 
 
             // Create PR from upstream branch to fork
