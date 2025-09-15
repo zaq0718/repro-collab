@@ -501,15 +501,21 @@ jobs:
               'You\’re now inside such a pull request: Your collaborators are waiting for your feedback on their preregistration draft.',
               `This PR closes #${preregIssue.number} (${preregIssue.title}).`,
               '', 
-              '**Task:** Suggest a change to the preregistration file',
-              '- Go to the **Files changed** tab of this PR.',
-              '- Find the typo in line 12 (empierically).', 
-              '- Suggest a correction by clicking the "+" symbol next to the line, typing the correction, and submitting your suggestion.',
-              '', 
-              `**Afterwards**: Once you\'ve suggested your change, return to ${context.payload.issue.html_url} and comment \`/done 6\` to continue`,
-              '',
-              '<img src="https://raw.githubusercontent.com/aaronpeikert/repro-collab/main/assets/make_suggestion.gif" alt="Make Suggestion GIF">'
-            ];
+              **Task:** Suggest a change to the preregistration file
+              - Go to the **Files changed** tab of this PR.
+              - Find the typo in line 12 ("empierically").
+              - Click the "+" button next to the line to start a comment.
+              - **Important:** Click **"Start a review"** (not "Add single comment") so your suggestion is part of a review.
+              - Write your correction as a ```suggestion and submit the review.
+
+              **How it looks:**
+              ![Start a review](URL_TO_IMAGE_1 "Start a review")
+              ![Add suggestion](URL_TO_IMAGE_2 "Add suggestion")
+
+              **Afterwards:** Once you've suggested your change, return to ${context.payload.issue.html_url} and comment `/done 6` to continue
+
+              <img src="https://raw.githubusercontent.com/aaronpeikert/repro-collab/main/assets/make_suggestion.gif" alt="Make Suggestion GIF">
+
 
             // Create PR from upstream branch to fork
             const { data: pr } = await github.rest.pulls.create({
@@ -768,50 +774,69 @@ jobs:
                 '## Partner Task: Generate and add data',
                 '',
                 '### Step 1: Generate Data',
-                `Visit [experiment](https://${context.repo.owner}.github.io/${context.repo.repo}/steven) → Generate 20+ trials together`,
+                `Visit [experiment](https://${context.repo.owner}.github.io/${context.repo.repo}/steven) and together generate at least 20 trials.`,
                 '',
-                '### Step 2: Upload to less experienced partner\'s fork',
-                '**Note:** GitHub cannot create empty folders - you must upload files to create the folder',
+                '**Note:** The app may take a moment to load. Please be patient until it is ready.',
                 '',
-                '**Option A - VS Code Web (if familiar with VS Code):**',
-                '1. Press `.` key on your fork\'s main page (or replace github.com → github.dev)',
-                '2. Create folder: Right-click → New Folder → name it `data`',
-                '3. Upload files: Right-click `data` folder → Upload...',
-                '4. Commit: Source Control icon → add message → commit',
+                '### Step 2: Upload your data files to the `data` folder in the less experienced partner\'s fork',
                 '',
-                '**Option B - Direct upload (if not using VS Code):**',
-                '1. Download CSV files from experiment to your computer',
-                '2. Create a local folder named `data` on your computer',
-                '3. Put CSV files inside this `data` folder',
-                '4. Go to fork → Add file → Upload files',
-                '5. Drag the entire `data` folder to upload area',
-                '6. Add commit message → Commit changes',
+                '**GitHub does not allow empty folders. The `data` folder will be created when you upload your files.**',
                 '',
-                `<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/data_PR.gif" alt="Make Issues GIF">`,
+                '**Option 1: Drag & Drop**',
+                '1. Go to your fork on GitHub.',
+                '2. Click on the `data` folder (create it if it does not exist).',
+                '3. Click "Add file" → "Upload files".',
+                '4. Drag your data files into the upload area.',
+                '5. Add a commit message and click "Commit changes".',
+                '',
+                '**Option 2: Add file**',
+                '1. Go to the `data` folder in your fork.',
+                '2. Click "Add file" → "Upload files".',
+                '3. Click "choose your files" and select your data files.',
+                '4. Add a commit message and commit.',
+                '',
+                '<img src="https://${context.repo.owner}.github.io/${context.repo.repo}/assets/data_PR.gif" alt="Upload data files GIF">',
                 '',
                 '### Step 3: Close this issue',
-                `Then return to ${preregistrationUrl} and comment \`/done 9\``,
+                `Once you have uploaded at least two data files, return to ${preregistrationUrl} and comment \`/done 9\` to continue.`,
+                '',
+                '---',
+                '',
+                '```markdown',
+                '# Milestone 9: Generate and Upload Data',
+                '',
+                '1. Generate at least two data files together using the experiment app.',
+                '2. Upload both files to the `data` folder in your repository.',
+                '',
+                'How to upload:',
+                '- Option 1: Drag & Drop via GitHub web interface.',
+                '- Option 2: Use "Add file" → "Upload files" in the `data` folder.',
+                '',
+                'You must have at least two files in `data` to complete this milestone.',
+                '```'
               ].join('\n')
             });
+
 
             
             // Success comment with link to the data generation issue
             const milestone8BodyLines = [
-              '🎉 Great that you now can start working with your partner!',
+              '🎉 Congratulation!',
               '',
               '**Milestone 9 - 🔴 Hard is now available: Generate data together**',
               '',
               'In this milestone, you will:',
-              '1. Use a Shiny app to gather data',
-              '2. Upload the data to the **less experienced** partner\'s fork',
+              '1. Use the experiment app to generate data',
+              '2. Upload the data files to the `data` folder in the **less experienced** partner\'s fork',
               '3. Collaborate on managing the data',
               '',
               '**Important:** Only the less experienced GitHub user should run `/done 9` after completing all tasks.',
               '',
-              `📋 I've created a detailed guide for generating and uploading data in your fork: ${dataGenIssue.data.html_url}`,
+              `📋 Guide for generating and uploading data: ${dataGenIssue.data.html_url}`,
               '',
-              'Please read it carefully with your partner before proceeding.'
+              'Please read it together before proceeding.'
             ];
+
             
             await github.rest.issues.createComment({
               owner: context.repo.owner,
