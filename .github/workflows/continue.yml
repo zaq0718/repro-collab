@@ -817,7 +817,7 @@ jobs:
                 '',
                 '**Option 2: Add file via <github.dev>/Visual Studio Code in the browser (medium)',
                 '1. Go to your fork on GitHub.',
-                '2. Type `.` or replace the `.com` in the url with `.dev`or click here https://github.dev/${owner}/${repo}/',
+                '2. '2. Type `.` or replace the `.com` in the url with `.dev`or click here https://github.dev/${owner}/${repo}/',
                 '3. Drag and drop you data files into the data folder.',
                 '4. Go to the Git tab, add a commit message and commit/push.',
                 '',
