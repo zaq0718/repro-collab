@@ -511,10 +511,10 @@ jobs:
               '- Find the typo in line 12 ("empierically").',
               '- Click the "+" button next to the line to start a comment.',
               '- **Important:** Click **"Start a review"** (not "Add single comment") so your suggestion is part of a review.',
-              '- Write your correction as a 
-              ```suggestion 
-              this is a suggestion
-              ```
+              '- Write your correction as a',
+              '```suggestion',
+              'this is a suggestion',
+              '```',
               '- And click on -> Start a Review -> Submit review -> Submit review',
               '',
               `**Afterwards:** Once you've suggested your change, return to ${context.payload.issue.html_url} and comment /done 6 to continue`,
