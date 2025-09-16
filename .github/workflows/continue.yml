@@ -511,7 +511,11 @@ jobs:
               '- Find the typo in line 12 ("empierically").',
               '- Click the "+" button next to the line to start a comment.',
               '- **Important:** Click **"Start a review"** (not "Add single comment") so your suggestion is part of a review.',
-              '- Write your correction as a ```suggestion and submit the review.',
+              '- Write your correction as a 
+              ```suggestion 
+              this is a suggestion
+              ```
+              '- And click on -> Start a Review -> Submit review -> Submit review',
               '',
               `**Afterwards:** Once you've suggested your change, return to ${context.payload.issue.html_url} and comment /done 6 to continue`,
               '',
@@ -789,7 +793,7 @@ jobs:
                 '',
                 '**Option 1: Upload directly as contributor (easy)**',
                 '1. Ask the repository owner to add you as a collaborator.',
-                '2. The owner goes to [Settings → Manage access → Add people.](https://github/${owner}/${repo}/settings/access)',
+                '2. The owner goes to [Settings → Manage access → Add people.](https://github/${owner}/${repo}/settings/access),
                 '3. The owner enters your GitHub username and sends the invitation.',
                 '4. Check your email or GitHub notifications for the invitation.',
                 '5. Accept the invitation to become a collaborator.',
