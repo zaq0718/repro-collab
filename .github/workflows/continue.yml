@@ -789,7 +789,7 @@ jobs:
                 '',
                 '**Option 1: Upload directly as contributor (easy)**',
                 '1. Ask the repository owner to add you as a collaborator.',
-                '2. The owner goes to [Settings → Manage access → Add people.](https://github/${owner}/${repo}/settings/access'),
+                '2. The owner goes to [Settings → Manage access → Add people.](https://github/${owner}/${repo}/settings/access)',
                 '3. The owner enters your GitHub username and sends the invitation.',
                 '4. Check your email or GitHub notifications for the invitation.',
                 '5. Accept the invitation to become a collaborator.',
