@@ -860,11 +860,6 @@ jobs:
               'Once both have uploaded at least two data files each (minimum 4 files total), return to ' + preregistrationUrl + ' and comment `/done 9` to continue.',
               ''
             ].join('\n')
-          });
-
-
-
-
             
             // Success comment with link to the data generation issue
             const milestone8BodyLines = [
