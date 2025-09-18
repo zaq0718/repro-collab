@@ -1,4 +1,3 @@
-
 strip_id <- function(path){
   tools::file_path_sans_ext(basename(path))
 }
