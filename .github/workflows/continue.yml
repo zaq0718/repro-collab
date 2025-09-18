@@ -810,7 +810,7 @@ jobs:
               '- Person B: Generate ≥20 trials', 
               '- Total: ≥40 trials minimum',
               '',
-              '**Note:** The app may take a moment to load. Please be patient until it is ready.',
+              '**Note:** The app may take a moment to load (or a long moment depending on internet speed). Please be patient until it is ready.',
               '',
               '### Step 2: Grant Access for Person A',
               '',
@@ -861,6 +861,7 @@ jobs:
               ''
             ].join('\n')
           });
+
 
 
 
