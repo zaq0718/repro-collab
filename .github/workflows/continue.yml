@@ -766,7 +766,7 @@ jobs:
               issue_number: context.issue.number,
               body: workshopCompleteLines.join('\n')
             });
-            
+
       # Milestone 8: Build groups
       - name: Verify milestone 8
         if: steps.parse.outputs.result == '8'
@@ -814,10 +814,18 @@ jobs:
                 '5. Accept the invitation to become a collaborator.',
                 '6. Once accepted, you can directly push changes to the repository without creating a pull request. (Step 3)',
                 '',
-                '**Option 2: Fork and Pull Request (hard)**',
-                '1. Fork the repository to your account.',
-                '2. Make changes in your fork.',
-                '3. Submit a pull request to the original repository.',
+                '**Option 2: Create a branch and Pull Request (hard)**',
+                '1. Create a new branch from the main branch:',
+                '   - Click on the branch dropdown (shows "main")',
+                '   - Type a new branch name (e.g., `add-data-yourname`)',
+                '   - Click "Create branch: add-data-yourname from main"',
+                '2. Switch to your new branch and make your changes there.',
+                '3. After uploading your data files (see Step 3), create a pull request:',
+                '   - Click on "Pull requests" tab',
+                '   - Click "New pull request"',
+                '   - Select your branch as the compare branch',
+                '   - Click "Create pull request"',
+                '   - Add a description and submit',
                 '',
                 '### Step 3: Upload your data files to the `data` folder in the less experienced partner\'s fork',
                 '',
