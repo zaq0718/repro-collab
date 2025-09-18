@@ -835,7 +835,6 @@ jobs:
               '',
               '**Each person uploads their own generated data to the `data` folder.**',
               '',
-              '**Note:** GitHub does not allow empty folders. The `data` folder will be created when uploading files.',
               '',
               '**Option 1: Drag & Drop (easy)**',
               '1. Navigate to the repository.',
